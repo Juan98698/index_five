@@ -1,0 +1,2154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Sobrecarga Progresiva</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #ffffff; --bg2: #f5f5f3; --bg3: #eeede8; --text: #1a1a18;
+      --text2: #6b6b67; --text3: #a0a09c; --border: rgba(0,0,0,0.1);
+      --border2: rgba(0,0,0,0.18); --radius: 8px; --radius-lg: 12px;
+      --green: #2a7a0c; --red: #A32D2D; --amber: #BA7517; --blue: #185FA5;
+      --green-light: #eaf5e1; --red-light: #fceaea; --accent: #185FA5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1c1a; --bg2: #262624; --bg3: #2e2e2b; --text: #f0efe8;
+        --text2: #a0a09c; --text3: #6b6b67; --border: rgba(255,255,255,0.1);
+        --border2: rgba(255,255,255,0.18); --green: #7EC94A; --red: #F07070;
+        --amber: #F0A830; --blue: #76B4F0; --accent: #76B4F0;
+        --green-light: #1a2e0e; --red-light: #2e1010;
+      }
+    }
+
+    html, body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg3);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.5;
+      margin: 0;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 0.875rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      flex-wrap: wrap;
+    }
+    header h1 { font-size: 16px; font-weight: 700; flex: 1; min-width: 0; }
+    header .session-count {
+      font-size: 12px;
+      color: var(--text3);
+      background: var(--bg2);
+      padding: 3px 10px;
+      border-radius: 99px;
+      white-space: nowrap;
+    }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 1rem; }
+
+    .top-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    select, input, textarea {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+    }
+    select:focus, input:focus, textarea:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(56,138,221,0.18);
+    }
+    textarea { resize: vertical; min-height: 64px; }
+
+    .tab-row {
+      display: flex;
+      gap: 3px;
+      background: var(--bg2);
+      padding: 3px;
+      border-radius: var(--radius);
+    }
+    .tab {
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--text2);
+      background: transparent;
+      border: none;
+      font-family: inherit;
+      transition: all 0.12s;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      white-space: nowrap;
+    }
+    .tab.active {
+      background: var(--bg);
+      color: var(--text);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+    }
+    .tab-disabled { opacity: 0.45; pointer-events: none; }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 1rem;
+    }
+    @media (min-width: 480px) {
+      .metrics { grid-template-columns: repeat(4, 1fr); }
+    }
+    .mcard {
+      background: var(--bg2);
+      border-radius: var(--radius);
+      padding: 0.875rem 1rem;
+      border: 1px solid var(--border);
+    }
+    .mcard-label { font-size: 11px; color: var(--text2); margin-bottom: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+    .mcard-value { font-size: 22px; font-weight: 700; }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 1.25rem 0 0.625rem;
+    }
+
+    .table-wrap {
+      background: var(--bg);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead tr { background: var(--bg2); }
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      color: var(--text2);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--bg2); }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-Pecho { background: #E6F1FB; color: #0C447C; }
+    .badge-Espalda { background: #FAEEDA; color: #633806; }
+    .badge-Piernas { background: #EAF3DE; color: #27500A; }
+    .badge-Hombros { background: #EEEDFE; color: #3C3489; }
+    .badge-Brazos { background: #FBEAF0; color: #72243E; }
+    .badge-Core { background: #F1EFE8; color: #444441; }
+    @media (prefers-color-scheme: dark) {
+      .badge-Pecho { background: #042C53; color: #B5D4F4; }
+      .badge-Espalda { background: #412402; color: #FAC775; }
+      .badge-Piernas { background: #173404; color: #C0DD97; }
+      .badge-Hombros { background: #26215C; color: #CECBF6; }
+      .badge-Brazos { background: #4B1528; color: #F4C0D1; }
+      .badge-Core { background: #2C2C2A; color: #D3D1C7; }
+    }
+
+    .delta-up { color: var(--green); font-weight: 600; }
+    .delta-dn { color: var(--red); font-weight: 600; }
+    .delta-eq { color: var(--text3); }
+    .num { text-align: right; }
+    .center { text-align: center; }
+
+    .chart-card {
+      background: var(--bg);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      padding: 1.25rem;
+    }
+    .chart-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; font-size: 12px; }
+    .legend-sq { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+    .form-section {
+      background: var(--bg);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      padding: 1.25rem;
+    }
+
+    .ejercicio-group {
+      background: var(--bg2);
+      border-radius: var(--radius);
+      padding: 1rem;
+      margin-bottom: 1.25rem;
+      border: 1px solid var(--border);
+      position: relative;
+    }
+
+    .remove-ejercicio {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--red);
+      font-size: 18px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-family: inherit;
+      line-height: 1;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      min-width: 44px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .remove-ejercicio:active { background: var(--bg3); }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    @media (min-width: 640px) {
+      .form-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group label { font-size: 12px; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .form-group input, .form-group select { width: 100%; }
+    .form-wide { grid-column: 1 / -1; }
+
+    .f-preview {
+      font-size: 12px;
+      color: var(--text2);
+      background: var(--bg);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .f-preview span { color: var(--text); font-weight: 600; }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+
+    .btn {
+      padding: 11px 18px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity 0.12s, transform 0.08s;
+      border: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--text); color: var(--bg); }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border2); color: var(--text); }
+    .btn-ghost:hover { background: var(--bg2); }
+    .btn-danger { background: transparent; color: var(--red); border: 1px solid var(--border); }
+
+    .del-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text3);
+      font-size: 17px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      min-width: 44px;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .del-btn:hover, .del-btn:active { color: var(--red); background: var(--bg2); }
+
+    .empty { text-align: center; padding: 3rem 1rem; color: var(--text3); font-size: 14px; }
+    .empty p { margin-bottom: 6px; }
+
+    /* ===== TOAST ===== */
+    #toast {
+      position: fixed;
+      bottom: calc(1.5rem + env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      padding: 12px 22px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      opacity: 0;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      pointer-events: none;
+      z-index: 999;
+      white-space: nowrap;
+      max-width: 90vw;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.toast-success { background: var(--green); color: #fff; }
+    #toast.toast-error { background: var(--red); color: #fff; }
+    #toast.toast-info { background: var(--text); color: var(--bg); }
+
+    /* ===== MODAL ===== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 500;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: env(safe-area-inset-bottom);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal-box {
+      background: var(--bg);
+      border-radius: 20px 20px 0 0;
+      width: 100%;
+      max-width: 520px;
+      padding: 1.5rem 1.25rem 2rem;
+      transform: translateY(100%);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .modal-overlay.open .modal-box { transform: translateY(0); }
+    .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+    .modal-msg { font-size: 14px; color: var(--text2); margin-bottom: 1.5rem; }
+    .modal-actions { display: flex; gap: 10px; flex-direction: column; }
+    .modal-confirm {
+      background: var(--red); color: #fff; border: none; border-radius: var(--radius);
+      padding: 13px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit;
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    }
+    .modal-cancel {
+      background: var(--bg2); color: var(--text); border: none; border-radius: var(--radius);
+      padding: 13px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit;
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    }
+
+    /* ===== VALIDATION BANNER ===== */
+    .validation-banner {
+      background: #FFEAEA;
+      border: 2px solid #cc0000;
+      color: #7a0000;
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 1rem;
+      font-size: 15px;
+      font-weight: 700;
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+      line-height: 1.5;
+      box-shadow: 0 2px 12px rgba(200,0,0,0.18);
+    }
+    .validation-banner.show { display: flex; }
+    @media (prefers-color-scheme: dark) {
+      .validation-banner { background: #3a0a0a; border-color: #e05050; color: #f49090; }
+    }
+
+    .reps-help { font-size: 11px; color: var(--text3); margin-top: 2px; }
+    .export-btn { background: var(--blue); color: white; border: none; margin-left: auto; }
+
+    .aviso-bloqueo {
+      display: none;
+      background: var(--amber);
+      color: black;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      margin-bottom: 1rem;
+      font-weight: 700;
+      text-align: center;
+      font-size: 14px;
+    }
+    .aviso-bloqueo a { color: black; text-decoration: underline; }
+
+    /* ===== SERIES BUILDER ===== */
+    .series-count-row {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;
+    }
+    .series-count-label { font-size: 12px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+    .series-count-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+    .series-n-btn {
+      min-width: 40px; height: 40px; border-radius: 8px; border: 2px solid var(--border);
+      background: var(--bg2); color: var(--text); font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: all 0.15s; -webkit-tap-highlight-color: transparent;
+    }
+    .series-n-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .serie-row {
+      display: flex; align-items: center; gap: 10px; padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .serie-row:last-child { border-bottom: none; }
+    .serie-label { font-size: 13px; font-weight: 600; color: var(--text2); min-width: 56px; }
+    .reps-btn {
+      width: 44px; height: 44px; border-radius: 10px; border: 2px solid var(--border);
+      background: var(--bg2); color: var(--text); font-size: 22px; font-weight: 700; line-height: 1;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+      user-select: none; -webkit-user-select: none;
+    }
+    .reps-btn:active { background: var(--border); }
+    .reps-val { font-size: 22px; font-weight: 800; min-width: 36px; text-align: center; color: var(--text); }
+    .reps-unit { font-size: 12px; color: var(--text3); font-weight: 600; }
+
+    .input-error {
+      border-color: #cc0000 !important;
+      box-shadow: 0 0 0 3px rgba(200,0,0,0.25) !important;
+      background: #fff5f5 !important;
+    }
+    @media (prefers-color-scheme: dark) {
+      .input-error { background: #2e0a0a !important; }
+    }
+
+    .container { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
+
+    /* ===== HOOK MOTIVACIONAL ===== */
+    .hook-banner {
+      background: #111110;
+      color: #fff;
+      border-radius: var(--radius-lg);
+      padding: 1.25rem 1.25rem 1.1rem;
+      margin-bottom: 1.25rem;
+      border-left: 4px solid #fff;
+      position: relative;
+      overflow: hidden;
+    }
+    .hook-banner::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 0; bottom: 0;
+      width: 120px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.03));
+      pointer-events: none;
+    }
+    .hook-quote-mark {
+      font-size: 48px;
+      line-height: 1;
+      color: rgba(255,255,255,0.12);
+      font-family: Georgia, serif;
+      display: block;
+      margin-bottom: -8px;
+    }
+    .hook-text {
+      font-size: 13.5px;
+      line-height: 1.7;
+      color: rgba(255,255,255,0.88);
+    }
+    .hook-text strong {
+      color: #fff;
+      font-weight: 700;
+    }
+    .hook-closing {
+      display: block;
+      margin-top: 0.75rem;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 0.01em;
+    }
+
+    /* ===== NOTIFICACIÓN DE SOBRECARGA PROGRESIVA ===== */
+    .sp-notif-banner {
+      border-radius: var(--radius-lg);
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+      border: 1px solid;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .sp-notif-banner.sp-subir    { background: var(--green-light); border-color: var(--green); }
+    .sp-notif-banner.sp-bajar    { background: var(--red-light); border-color: var(--red); }
+    .sp-notif-banner.sp-mantener { background: #FFF8E6; border-color: var(--amber); }
+    .sp-notif-banner.sp-descanso { background: #EEF4FF; border-color: var(--blue); }
+    .sp-notif-banner.sp-cambio   { background: #F5EEF8; border-color: #8E44AD; }
+    .sp-notif-banner.sp-info     { background: var(--bg2); border-color: var(--border2); }
+    @media (prefers-color-scheme: dark) {
+      .sp-notif-banner.sp-mantener { background: #2e2100; border-color: var(--amber); }
+      .sp-notif-banner.sp-descanso { background: #0a1a30; border-color: var(--blue); }
+      .sp-notif-banner.sp-cambio   { background: #1e0e28; border-color: #C39BD3; }
+    }
+    .sp-notif-header {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 700; margin-bottom: 4px;
+    }
+    .sp-notif-body  { font-size: 13px; color: var(--text2); line-height: 1.5; }
+    .sp-notif-close {
+      margin-left: auto; background: none; border: none; cursor: pointer;
+      color: var(--text3); font-size: 16px; padding: 0 4px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #sp-notif-container { margin-bottom: 0.5rem; }
+
+    /* ===== PANEL DE CONFIGURACIÓN DE REGLAS ===== */
+    #panel-config { display: none; }
+    .config-section {
+      background: var(--bg);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .config-section-title {
+      font-size: 13px; font-weight: 700; margin-bottom: 1rem;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .config-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (min-width: 640px) {
+      .config-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .config-group { display: flex; flex-direction: column; gap: 5px; }
+    .config-group label { font-size: 11px; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .config-group input, .config-group select { width: 100%; font-size: 14px; padding: 8px 10px; }
+    .config-group .hint { font-size: 11px; color: var(--text3); margin-top: 2px; line-height: 1.4; }
+    .config-wide { grid-column: 1 / -1; }
+    .config-group textarea { width: 100%; font-size: 13px; padding: 8px 10px; resize: vertical; min-height: 56px; }
+    .rule-card {
+      background: var(--bg2);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .rule-card-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 0.75rem;
+    }
+    .rule-badge {
+      font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 99px;
+    }
+    .rule-badge.rb-subir    { background: var(--green-light); color: var(--green); }
+    .rule-badge.rb-bajar    { background: var(--red-light); color: var(--red); }
+    .rule-badge.rb-mantener { background: #FFF8E6; color: var(--amber); }
+    .rule-badge.rb-descanso { background: #EEF4FF; color: var(--blue); }
+    .rule-badge.rb-cambio   { background: #F5EEF8; color: #8E44AD; }
+    .rule-badge.rb-info     { background: var(--bg3); color: var(--text2); }
+    .toggle-rule {
+      margin-left: auto; display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--text2); cursor: pointer; user-select: none;
+    }
+    .toggle-rule input[type=checkbox] { display: none; }
+    .toggle-track {
+      width: 40px; height: 22px; border-radius: 11px;
+      background: var(--border2); position: relative;
+      transition: background 0.2s; flex-shrink: 0;
+      border: 2px solid transparent;
+    }
+    .toggle-rule input:checked + .toggle-track { background: var(--green); }
+    .toggle-knob {
+      position: absolute; top: 2px; left: 2px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #fff; transition: left 0.2s;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    .toggle-rule input:checked + .toggle-track .toggle-knob { left: 20px; }
+    .toggle-label { font-weight: 600; }
+    .save-config-btn { background: var(--green); color: #fff; }
+    .reset-config-btn { background: transparent; border: 1px solid var(--border2); color: var(--text2); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>💪 Sobrecarga Progresiva</h1>
+  <span class="session-count" id="headerCount">0 sesiones</span>
+  <div id="clienteNombreHeader" style="display:none; font-size:13px; color:var(--text2); background:var(--bg2); padding:4px 12px; border-radius:99px; white-space:nowrap;"></div>
+  <button id="generarLinkBtn" class="btn export-btn" style="display:none;">🔗 Generar link cliente</button>
+</header>
+
+<!-- Panel generador de links (solo entrenador) -->
+<div id="panelGenerarLink" style="display:none; background:var(--bg); border-bottom:1px solid var(--border); padding:1rem;">
+  <div style="max-width:520px; margin:0 auto;">
+    <div style="font-size:13px; font-weight:700; margin-bottom:10px; color:var(--text2); text-transform:uppercase; letter-spacing:0.05em;">Generar link para cliente</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">
+      <div style="flex:1; min-width:180px;">
+        <label style="font-size:11px; color:var(--text2); font-weight:600; display:block; margin-bottom:4px;">NOMBRE DEL CLIENTE</label>
+        <input type="text" id="inputNombreCliente" placeholder="ej: juan, maria-lopez" style="width:100%;" oninput="previsualizarLink()">
+      </div>
+      <button class="btn btn-primary" onclick="copiarLinkCliente()" style="white-space:nowrap;">📋 Copiar link</button>
+      <button class="btn btn-ghost" onclick="cerrarPanelLink()" style="white-space:nowrap;">Cerrar</button>
+    </div>
+    <div id="previewLink" style="margin-top:10px; font-size:12px; color:var(--text3); word-break:break-all; background:var(--bg2); padding:8px 12px; border-radius:6px; display:none;"></div>
+    <div style="margin-top:8px; font-size:12px; color:var(--text3);">💡 Cada nombre genera datos aislados. Usá el mismo nombre siempre para el mismo cliente.</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="aviso-bloqueo" id="avisoBloqueo">
+    🔒 Tu plan de 31 días ha finalizado. <a href="#" id="renovarLink">Contacta a tu entrenador para renovar</a>.
+  </div>
+
+  <!-- Notificaciones de sobrecarga progresiva -->
+  <div id="sp-notif-container"></div>
+
+  <div class="top-bar">
+    <select id="ejercicioSelect" style="min-width:180px; flex:1; max-width:280px;">
+      <option value="">Todos los ejercicios</option>
+    </select>
+    <div class="tab-row">
+      <button class="tab active" id="tab-hist">Historial</button>
+      <button class="tab" id="tab-chart">Progresión</button>
+      <button class="tab" id="tab-add">+ Sesión</button>
+      <button class="tab" id="tab-config">⚙️ Reglas</button>
+    </div>
+  </div>
+
+  <div class="metrics" id="metrics"></div>
+
+  <!-- HISTORIAL -->
+  <div id="panel-hist">
+    <!-- HOOK MOTIVACIONAL -->
+    <div class="hook-banner">
+      <span class="hook-quote-mark">&ldquo;</span>
+      <p class="hook-text">
+        <strong>Lo que no se mide, no se puede mejorar.</strong>
+        La sobrecarga progresiva &mdash; el principio m&aacute;s importante del entrenamiento de fuerza &mdash;
+        requiere que sepas exactamente qu&eacute; y cu&aacute;nto hiciste la &uacute;ltima vez para poder superarlo.
+        Sin esa informaci&oacute;n, ese esfuerzo se pierde en el aire.
+        Un registro completo convierte cada sesi&oacute;n en informaci&oacute;n &uacute;til.
+      </p>
+      <span class="hook-closing">&#9888;&#65039; Sin historial no hay progresi&oacute;n inteligente, &#128293; guard&aacute; hoy, y super&aacute;te ma&ntilde;ana.</span>
+    </div>
+    <div class="section-title">Historial de sesiones</div>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th><th>Ejercicio</th><th>Grupo</th><th class="center">Series</th><th class="center">Reps</th>
+              <th class="center">Peso (kg)</th><th class="center">RIR</th><th class="center">Descanso</th>
+              <th class="num">Volumen</th><th class="num">1RM est.</th><th class="center">Δ Vol.</th><th>Notas</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="histBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROGRESIÓN -->
+  <div id="panel-chart" style="display:none">
+    <div class="section-title" id="chartTitle">Progresión</div>
+    <div class="chart-card">
+      <div class="chart-legend">
+        <span><span class="legend-sq" style="background:#378ADD"></span> Volumen total (kg)</span>
+        <span><span class="legend-sq" style="background:#1D9E75; border-radius:50%"></span> 1RM estimado (kg)</span>
+      </div>
+      <div style="position:relative; width:100%; height:260px;"><canvas id="mainChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- AGREGAR SESIÓN -->
+  <div id="panel-add" style="display:none">
+    <div class="section-title">Nueva sesión</div>
+    <div class="form-section">
+      <div id="validationBanner" class="validation-banner">
+        <span id="validationMsg"></span>
+      </div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr; max-width:400px; margin-bottom:1rem;">
+        <div class="form-group">
+          <label>Fecha</label>
+          <input type="date" id="fecha_sesion">
+        </div>
+      </div>
+      <div class="form-group form-wide" style="margin-bottom:1rem;">
+        <label>Notas generales (opcional)</label>
+        <textarea id="notas_sesion" rows="2" placeholder="Calentamiento, sensaciones generales..."></textarea>
+      </div>
+      <div id="ejerciciosContainer"></div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="agregarEjercicioBtn">+ Agregar ejercicio</button>
+        <button class="btn btn-primary" id="guardarSesionBtn">💾 Guardar sesión</button>
+        <button class="btn btn-ghost" id="cancelarBtn">Cancelar</button>
+        <button class="btn btn-danger" id="borrarTodosBtn" style="display:none;">🗑 Borrar todo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PANEL CONFIGURACIÓN DE REGLAS ===== -->
+  <div id="panel-config">
+    <div class="section-title">⚙️ Motor de sobrecarga progresiva — Configuración de reglas</div>
+
+    <div class="config-section">
+      <div class="config-section-title">📊 Parámetros generales de análisis</div>
+      <div class="config-grid">
+        <div class="config-group">
+          <label>Sesiones mínimas para analizar</label>
+          <input type="number" id="cfg_minSesiones" min="1" max="10" step="1">
+          <div class="hint">No se generan sugerencias si hay menos sesiones que este valor por ejercicio.</div>
+        </div>
+        <div class="config-group">
+          <label>Sesiones a mirar atrás</label>
+          <input type="number" id="cfg_ventana" min="2" max="10" step="1">
+          <div class="hint">Cuántas sesiones recientes se consideran para el análisis (ventana deslizante).</div>
+        </div>
+        <div class="config-group">
+          <label>Días sin entrenar = descanso excesivo</label>
+          <input type="number" id="cfg_diasDescansoExcesivo" min="3" max="30" step="1">
+          <div class="hint">Si el intervalo entre sesiones supera este valor, se sugiere retomar con menos peso.</div>
+        </div>
+        <div class="config-group">
+          <label>Días entre sesiones = óptimo</label>
+          <input type="number" id="cfg_diasOptimo" min="1" max="14" step="1">
+          <div class="hint">Rango máximo considerado normal entre sesiones del mismo ejercicio.</div>
+        </div>
+        <div class="config-group">
+          <label>Sesiones seguidas con baja de volumen</label>
+          <input type="number" id="cfg_sesionesRegresionAlerta" min="2" max="6" step="1">
+          <div class="hint">Si el volumen baja este número de sesiones consecutivas, se activa la alerta de regresión.</div>
+        </div>
+        <div class="config-group">
+          <label>Ejercicios similares para sugerir cambio</label>
+          <input type="number" id="cfg_semanasEstancamiento" min="2" max="12" step="1">
+          <div class="hint">Sesiones sin mejora de 1RM estimado antes de sugerir variar el ejercicio (complementa la detección por peso/reps).</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REGLAS INDIVIDUALES -->
+    <div class="config-section">
+      <div class="config-section-title">📋 Reglas de notificación</div>
+      <p style="font-size:13px; color:var(--text2); margin-bottom:1rem;">Cada regla tiene una condición que se evalúa automáticamente al abrir el historial. Podés activar/desactivar cada una y editar los mensajes. Usá <code style="background:var(--bg2);padding:1px 5px;border-radius:4px;">{ejercicio}</code>, <code style="background:var(--bg2);padding:1px 5px;border-radius:4px;">{valor}</code>, <code style="background:var(--bg2);padding:1px 5px;border-radius:4px;">{peso}</code>, <code style="background:var(--bg2);padding:1px 5px;border-radius:4px;">{porciento}</code> como variables en los textos.</p>
+      <div id="rules-editor"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn save-config-btn" id="saveConfigBtn">💾 Guardar configuración</button>
+      <button class="btn reset-config-btn" id="resetConfigBtn">↺ Restaurar valores por defecto</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal confirmación -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box">
+    <div class="modal-title" id="modalTitle">¿Confirmar acción?</div>
+    <div class="modal-msg" id="modalMsg"></div>
+    <div class="modal-actions">
+      <button class="modal-confirm" id="modalConfirmBtn">Confirmar</button>
+      <button class="modal-cancel" id="modalCancelBtn">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ================= CONFIGURACIÓN =================
+  var _urlParams = new URLSearchParams(window.location.search);
+  var _clienteId = _urlParams.get('c') ? _urlParams.get('c').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '') : '';
+  const MODO_CLIENTE = _clienteId !== '';
+  let STORAGE_KEY = _clienteId ? ('sp_cliente_' + _clienteId) : 'sobrecarga_v5';
+  let CICLO_KEY   = _clienteId ? ('sp_ciclo_'   + _clienteId) : 'fechaInicioCiclo';
+  const CONFIG_KEY = 'sp_config_v1';
+
+  let sesiones = [];
+  let nextSesionId = 1;
+  let nextEjercicioId = 1;
+  let activeTab = 'hist';
+  let chart = null;
+  let tempEjercicios = [];
+
+  // ===============================================================
+  // ===== MOTOR DE SOBRECARGA PROGRESIVA — REGLAS POR DEFECTO =====
+  // ===============================================================
+
+  const DEFAULT_CONFIG = {
+    minSesiones: 3,          // mínimo de sesiones para evaluar un ejercicio
+    ventana: 4,              // cuántas sesiones recientes mirar
+    diasDescansoExcesivo: 10,// días sin entrenar que activan regresión de peso
+    diasOptimo: 7,           // días entre sesiones considerados normales
+    sesionesRegresionAlerta: 3,
+    semanasEstancamiento: 6, // semanas sin mejora de 1RM
+  };
+
+  // Reglas por defecto. Cada regla tiene:
+  //   id, tipo (subir|bajar|mantener|descanso|cambio|info), activa, titulo, mensaje
+  // Variables disponibles en mensajes: {ejercicio} {valor} {peso} {porciento}
+  const DEFAULT_RULES = [
+    {
+      id: 'subir_peso_reps',
+      tipo: 'subir',
+      activa: true,
+      titulo: '⬆️ Subir peso',
+      mensaje: 'En {ejercicio} el RIR promedio fue {valor} (te quedan muchas reps en reserva — el peso es poco retador) durante las últimas sesiones. Intentá subir el peso un {porciento}% la próxima vez (~{peso} kg).',
+      // RIR = Repeticiones en Reserva. 0 = fallo muscular, 1-2 = cerca del fallo, 3+ = demasiado margen.
+      // Si el RIR promedio es ALTO (≥ umbral), el peso es demasiado fácil → sugerir subir peso.
+      rir_umbral: 3,            // RIR promedio ≥ este valor = peso demasiado fácil → subir peso
+      sesiones_consecutivas: 2, // cuántas sesiones consecutivas cumplir
+      incremento_porciento: 5,  // % de incremento sugerido
+      incremento_minimo_kg: 2.5, // mínimo absoluto de incremento (siempre redondea a 2.5)
+    },
+    {
+      id: 'subir_peso_reps_objetivo',
+      tipo: 'subir',
+      activa: true,
+      titulo: '⬆️ Subir peso — Reps objetivo alcanzadas',
+      mensaje: 'En {ejercicio} ({grupo}) alcanzaste o superaste el objetivo de {reps_objetivo} reps en al menos {series_minimas} series, durante {sesiones_consecutivas} sesiones seguidas. Es momento de subir el peso un {porciento}% (~{peso} kg).',
+      // Umbrales de reps por grupo muscular (editables desde el panel)
+      reps_por_grupo: {
+        Pecho:    10,
+        Espalda:  10,
+        Piernas:  12,
+        Hombros:  12,
+        Brazos:   15,
+        Core:     15,
+      },
+      series_minimas_pct: 75,    // % mínimo de series que deben cumplir el umbral (ej: 75% = 3 de 4, 2 de 3, 2 de 2)
+      sesiones_consecutivas: 2,  // sesiones seguidas que deben cumplir la condición
+      incremento_porciento: 5,
+      incremento_minimo_kg: 2.5,
+    },
+    {
+      id: 'subir_reps_antes_peso',
+      tipo: 'subir',
+      activa: true,
+      titulo: '⬆️ Agregar repeticiones',
+      mensaje: 'En {ejercicio} tu volumen creció {porciento}% en las últimas sesiones. Considerá agregar 1-2 reps por serie antes de subir el peso.',
+      umbral_crecimiento_vol: 5, // % de crecimiento de volumen que activa esta sugerencia
+      sesiones_consecutivas: 2,
+    },
+    {
+      id: 'mantener_peso',
+      tipo: 'mantener',
+      activa: true,
+      titulo: '= Mantener peso',
+      mensaje: 'En {ejercicio} el volumen se mantuvo estable (±{valor}%). Seguí con {peso} kg y enfocate en mejorar la técnica o reducir el descanso.',
+      umbral_estabilidad: 3, // ±% para considerar "estable"
+      sesiones_consecutivas: 2,
+    },
+    {
+      id: 'bajar_peso_rir_alto',
+      tipo: 'bajar',
+      activa: true,
+      titulo: '⬇️ Bajar peso — Cerca del fallo',
+      mensaje: 'En {ejercicio} el RIR promedio fue {valor} (muy cerca del fallo muscular) pero el volumen bajó. El peso puede ser demasiado alto para sostener la progresión. Considerá bajar un {porciento}% (~{peso} kg) para recuperar calidad de ejecución.',
+      // RIR = Repeticiones en Reserva. 0=fallo muscular, 1=1 rep en reserva, 2=2 reps, etc.
+      // RIR BAJO (≤ umbral) + volumen cayendo = el peso es demasiado alto → bajar peso
+      rir_umbral_bajo: 2,    // RIR ≤ este valor = entrenando muy cerca del fallo
+      reduccion_porciento: 10,
+      sesiones_consecutivas: 2,
+    },
+    {
+      id: 'bajar_peso_regresion',
+      tipo: 'bajar',
+      activa: true,
+      titulo: '⬇️ Bajar peso — Regresión de volumen',
+      mensaje: 'El volumen en {ejercicio} cayó {porciento}% en las últimas {valor} sesiones seguidas. Considerá bajar el peso un 5-10% y reconstruir progresión.',
+      reduccion_porciento: 7,
+    },
+    {
+      id: 'descanso_excesivo',
+      tipo: 'descanso',
+      activa: true,
+      titulo: '😴 Retomar tras descanso largo',
+      mensaje: 'Han pasado {valor} días desde la última sesión de {ejercicio}. Retomá con {porciento}% menos de peso (~{peso} kg) para evitar el sobreentrenamiento.',
+      reduccion_porciento: 10,
+    },
+    {
+      id: 'descanso_corto',
+      tipo: 'info',
+      activa: true,
+      titulo: '⏱ Descanso entre series — Alto',
+      mensaje: 'En {ejercicio} el descanso promedio fue {valor}s. Si querés mayor densidad de entrenamiento, reducí a 90-120s entre series.',
+      umbral_descanso_alto: 180, // segundos
+    },
+    {
+      id: 'estancamiento',
+      tipo: 'cambio',
+      activa: true,
+      titulo: '🔄 Posible estancamiento',
+      mensaje: 'En {ejercicio} no hubo mejora en {valor} sesiones seguidas (mismo peso y repeticiones, sin progresar el 1RM estimado). Considerá cambiar el ángulo, el agarre, o sustituir por un ejercicio similar durante 2-3 semanas.',
+      sesiones_sin_mejora_peso_reps: 3, // sesiones consecutivas sin superar peso ni reps
+    },
+    {
+      id: 'racha_positiva',
+      tipo: 'subir',
+      activa: true,
+      titulo: '🔥 Racha de progreso',
+      mensaje: '¡Excelente! En {ejercicio} mejoraste el volumen {valor} sesiones seguidas. Seguí así y considerá subir el peso en la próxima sesión.',
+      sesiones_racha: 3,
+    },
+    {
+      id: 'primer_sesion',
+      tipo: 'info',
+      activa: true,
+      titulo: '🏁 Primera sesión registrada',
+      mensaje: 'Registraste tu primera sesión de {ejercicio}. Necesitás al menos 3 sesiones para que el motor de progresión te dé sugerencias personalizadas.',
+    },
+  ];
+
+  // ============================================================
+  // ===== ESTADO DE CONFIGURACIÓN (carga desde localStorage) ===
+  // ============================================================
+
+  let CONFIG = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  let RULES  = JSON.parse(JSON.stringify(DEFAULT_RULES));
+
+  function loadConfig() {
+    try {
+      // Si hay ?cfg= en la URL (modo cliente con config heredada del entrenador), usarla
+      const urlParams = new URLSearchParams(window.location.search);
+      const cfgParam = urlParams.get('cfg');
+      if (cfgParam && MODO_CLIENTE) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(escape(atob(cfgParam))));
+          if (parsed.config) CONFIG = Object.assign({}, DEFAULT_CONFIG, parsed.config);
+          if (parsed.rules && Array.isArray(parsed.rules)) {
+            RULES = DEFAULT_RULES.map(def => {
+              const saved = parsed.rules.find(r => r.id === def.id);
+              return saved ? Object.assign({}, def, saved) : def;
+            });
+          }
+          return; // Config heredada cargada — no leer localStorage
+        } catch(e) { console.warn('Error leyendo config de URL, usando defaults:', e); }
+      }
+      // Modo entrenador: cargar desde localStorage
+      const saved = storageGet(CONFIG_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.config) CONFIG = Object.assign({}, DEFAULT_CONFIG, parsed.config);
+        if (parsed.rules && Array.isArray(parsed.rules)) {
+          RULES = DEFAULT_RULES.map(def => {
+            const saved = parsed.rules.find(r => r.id === def.id);
+            return saved ? Object.assign({}, def, saved) : def;
+          });
+        }
+      }
+    } catch(e) { console.error('Error cargando config:', e); }
+  }
+
+  function saveConfig() {
+    storageSet(CONFIG_KEY, JSON.stringify({ config: CONFIG, rules: RULES }));
+  }
+
+  // ============================================================
+  // ===== MOTOR DE ANÁLISIS DE SOBRECARGA PROGRESIVA ===========
+  // ============================================================
+
+  function analizarSobrecargaProgresiva() {
+    const ejercicios = obtenerTodosEjercicios();
+    const notifs = [];
+
+    for (const nombre of ejercicios) {
+      const filas = obtenerFilas(nombre);
+      if (filas.length === 0) continue;
+
+      const n = filas.length;
+
+      // --- Primera sesión ---
+      if (n === 1) {
+        const r = RULES.find(r => r.id === 'primer_sesion');
+        if (r && r.activa) {
+          notifs.push({ tipo: r.tipo, titulo: r.titulo, mensaje: interpolar(r.mensaje, { ejercicio: nombre }) });
+        }
+        continue;
+      }
+
+      if (n < CONFIG.minSesiones) continue;
+
+      const ventana = Math.min(CONFIG.ventana, n);
+      const recientes = filas.slice(-ventana);
+      const ultima = filas[n - 1];
+      const penultima = n >= 2 ? filas[n - 2] : null;
+
+      // Días desde última sesión
+      const diasDesdeUltima = penultima
+        ? Math.round((parsearFechaISO(ultima.fecha) - parsearFechaISO(penultima.fecha)) / (1000*60*60*24))
+        : null;
+
+      // Promedios de la ventana
+      const avgRIR = recientes.reduce((s, f) => s + f.rpe, 0) / recientes.length;
+      const avgDescanso = recientes.reduce((s, f) => s + f.descanso, 0) / recientes.length;
+
+      // Variación de volumen entre las últimas 2 sesiones
+      const volActual = ultima.volumen;
+      const volAnterior = penultima ? penultima.volumen : null;
+      const deltaPct = volAnterior ? ((volActual - volAnterior) / volAnterior) * 100 : null;
+
+      // Verificar regresión consecutiva de volumen
+      let regresionCount = 0;
+      for (let i = n - 1; i >= 1; i--) {
+        if (filas[i].volumen < filas[i-1].volumen) regresionCount++;
+        else break;
+      }
+
+      // Verificar racha positiva de volumen
+      let rachaPositiva = 0;
+      for (let i = n - 1; i >= 1; i--) {
+        if (filas[i].volumen > filas[i-1].volumen) rachaPositiva++;
+        else break;
+      }
+
+      // Estancamiento de 1RM
+      let sesionsSin1RMMejora = 0;
+      const rm1Max = Math.max(...filas.map(f => f.rm));
+      for (let i = n - 1; i >= 0; i--) {
+        if (Math.abs(filas[i].rm - rm1Max) < 0.5) break;
+        sesionsSin1RMMejora++;
+      }
+      // Sesiones sin mejora (1RM no supera el más reciente)
+      let sesionsSinMejora = 0;
+      const rm1Reciente = filas[n-1].rm;
+      for (let i = n - 2; i >= 0; i--) {
+        if (filas[i].rm >= rm1Reciente - 0.5) { sesionsSinMejora++; }
+        else break;
+      }
+      const totalSinMejora = sesionsSinMejora;
+
+      // Estancamiento de peso+reps: cuántas sesiones seguidas sin superar el peso ni las reps totales
+      let sesionsSinMejoraPesoReps = 0;
+      const pesoUltima = filas[n-1].peso;
+      const repsUltima = filas[n-1].repsArray.reduce((a,b) => a+b, 0);
+      for (let i = n - 2; i >= 0; i--) {
+        const pesoI = filas[i].peso;
+        const repsI = filas[i].repsArray.reduce((a,b) => a+b, 0);
+        // Si la sesión anterior tenía igual o mayor peso Y igual o mayor reps, no hubo mejora
+        if (pesoI >= pesoUltima - 0.01 && repsI >= repsUltima) sesionsSinMejoraPesoReps++;
+        else break;
+      }
+
+      // ====== EVALUAR REGLAS ======
+
+      // 1. DESCANSO EXCESIVO
+      const rDescansoEx = RULES.find(r => r.id === 'descanso_excesivo');
+      if (rDescansoEx && rDescansoEx.activa && diasDesdeUltima !== null && diasDesdeUltima > CONFIG.diasDescansoExcesivo) {
+        const redPct = rDescansoEx.reduccion_porciento;
+        const pesoNuevo = redondearPeso(ultima.peso * (1 - redPct / 100));
+        notifs.push({
+          tipo: rDescansoEx.tipo, titulo: rDescansoEx.titulo,
+          mensaje: interpolar(rDescansoEx.mensaje, {
+            ejercicio: nombre, valor: diasDesdeUltima,
+            porciento: redPct, peso: pesoNuevo
+          })
+        });
+        continue; // descanso excesivo tiene prioridad
+      }
+
+      // 2. REGRESIÓN CONSECUTIVA
+      const rReg = RULES.find(r => r.id === 'bajar_peso_regresion');
+      if (rReg && rReg.activa && regresionCount >= CONFIG.sesionesRegresionAlerta) {
+        const redPct = rReg.reduccion_porciento;
+        const pesoNuevo = redondearPeso(ultima.peso * (1 - redPct / 100));
+        notifs.push({
+          tipo: rReg.tipo, titulo: rReg.titulo,
+          mensaje: interpolar(rReg.mensaje, {
+            ejercicio: nombre, valor: regresionCount,
+            porciento: Math.abs(deltaPct || 0).toFixed(1), peso: pesoNuevo
+          })
+        });
+      }
+
+      // 3. RIR BAJO + VOLUMEN CAYENDO → bajar peso (el peso es demasiado alto para sostener progresión)
+      const rRirAlto = RULES.find(r => r.id === 'bajar_peso_rir_alto');
+      if (rRirAlto && rRirAlto.activa && avgRIR <= rRirAlto.rir_umbral_bajo && regresionCount >= rRirAlto.sesiones_consecutivas) {
+        const redPct = rRirAlto.reduccion_porciento;
+        const pesoNuevo = redondearPeso(ultima.peso * (1 - redPct / 100));
+        notifs.push({
+          tipo: rRirAlto.tipo, titulo: rRirAlto.titulo,
+          mensaje: interpolar(rRirAlto.mensaje, {
+            ejercicio: nombre, valor: avgRIR.toFixed(1),
+            porciento: redPct, peso: pesoNuevo
+          })
+        });
+      }
+
+      // 4. RIR ALTO (≥ umbral) → subir peso (el peso es demasiado fácil)
+      const rSubir = RULES.find(r => r.id === 'subir_peso_reps');
+      if (rSubir && rSubir.activa) {
+        const riresRecientes = recientes.slice(-rSubir.sesiones_consecutivas).map(f => f.rpe);
+        const todosRIRAltos = riresRecientes.length >= rSubir.sesiones_consecutivas &&
+          riresRecientes.every(r => r >= rSubir.rir_umbral);
+        if (todosRIRAltos && regresionCount === 0) {
+          const incPct = rSubir.incremento_porciento;
+          const incKg = Math.max(rSubir.incremento_minimo_kg, ultima.peso * incPct / 100);
+          const pesoNuevo = redondearPeso(ultima.peso + incKg);
+          notifs.push({
+            tipo: rSubir.tipo, titulo: rSubir.titulo,
+            mensaje: interpolar(rSubir.mensaje, {
+              ejercicio: nombre, valor: avgRIR.toFixed(1),
+              porciento: incPct, peso: pesoNuevo
+            })
+          });
+        }
+      }
+
+      // 5. REPS OBJETIVO POR GRUPO MUSCULAR → subir peso
+      const rRepsObj = RULES.find(r => r.id === 'subir_peso_reps_objetivo');
+      if (rRepsObj && rRepsObj.activa && n >= rRepsObj.sesiones_consecutivas) {
+        const grupo = filas[0].grupo || '';
+        const repsObjetivo = (rRepsObj.reps_por_grupo && rRepsObj.reps_por_grupo[grupo]) || 10;
+        const seriesMinPct = rRepsObj.series_minimas_pct || 75;
+        const ultimasSesiones = recientes.slice(-rRepsObj.sesiones_consecutivas);
+        const todasCumplen = ultimasSesiones.length >= rRepsObj.sesiones_consecutivas &&
+          ultimasSesiones.every(fila => {
+            const totalSeries = fila.repsArray.length;
+            if (totalSeries === 0) return false;
+            const seriesNecesarias = Math.ceil(totalSeries * seriesMinPct / 100);
+            const seriesCumplen = fila.repsArray.filter(r => r >= repsObjetivo).length;
+            return seriesCumplen >= seriesNecesarias;
+          });
+        if (todasCumplen) {
+          const incPct = rRepsObj.incremento_porciento;
+          const incKg = Math.max(rRepsObj.incremento_minimo_kg, ultima.peso * incPct / 100);
+          const pesoNuevo = redondearPeso(ultima.peso + incKg);
+          const seriesMinimas = Math.ceil((ultima.repsArray.length || 1) * seriesMinPct / 100);
+          notifs.push({
+            tipo: rRepsObj.tipo, titulo: rRepsObj.titulo,
+            mensaje: interpolar(rRepsObj.mensaje, {
+              ejercicio: nombre, valor: repsObjetivo,
+              grupo: grupo, reps_objetivo: repsObjetivo,
+              series_minimas: seriesMinimas,
+              sesiones_consecutivas: rRepsObj.sesiones_consecutivas,
+              porciento: incPct, peso: pesoNuevo
+            })
+          });
+        }
+      }
+
+      // 6. CRECIMIENTO DE VOLUMEN → sugerir más reps antes de subir peso
+      const rReps = RULES.find(r => r.id === 'subir_reps_antes_peso');
+      if (rReps && rReps.activa && deltaPct !== null && deltaPct >= rReps.umbral_crecimiento_vol && rachaPositiva >= rReps.sesiones_consecutivas) {
+        notifs.push({
+          tipo: rReps.tipo, titulo: rReps.titulo,
+          mensaje: interpolar(rReps.mensaje, {
+            ejercicio: nombre, valor: ultima.peso,
+            porciento: deltaPct.toFixed(1), peso: ultima.peso
+          })
+        });
+      }
+
+      // 6. VOLUMEN ESTABLE → mantener
+      const rMantener = RULES.find(r => r.id === 'mantener_peso');
+      if (rMantener && rMantener.activa && deltaPct !== null
+        && Math.abs(deltaPct) <= rMantener.umbral_estabilidad
+        && rachaPositiva === 0 && regresionCount === 0) {
+        notifs.push({
+          tipo: rMantener.tipo, titulo: rMantener.titulo,
+          mensaje: interpolar(rMantener.mensaje, {
+            ejercicio: nombre, valor: Math.abs(deltaPct).toFixed(1),
+            porciento: 0, peso: ultima.peso
+          })
+        });
+      }
+
+      // 7. DESCANSO ALTO → reducir
+      const rDescansoCorto = RULES.find(r => r.id === 'descanso_corto');
+      if (rDescansoCorto && rDescansoCorto.activa && avgDescanso >= rDescansoCorto.umbral_descanso_alto) {
+        notifs.push({
+          tipo: rDescansoCorto.tipo, titulo: rDescansoCorto.titulo,
+          mensaje: interpolar(rDescansoCorto.mensaje, {
+            ejercicio: nombre, valor: Math.round(avgDescanso),
+            porciento: 0, peso: ultima.peso
+          })
+        });
+      }
+
+      // 8. ESTANCAMIENTO — se activa si hay estancamiento de 1RM O de peso+reps
+      const rEstanc = RULES.find(r => r.id === 'estancamiento');
+      if (rEstanc && rEstanc.activa) {
+        const umbralPesoReps = rEstanc.sesiones_sin_mejora_peso_reps || 3;
+        const umbral1RM = CONFIG.semanasEstancamiento; // reutilizamos este config para 1RM
+        const hayEstanc1RM = totalSinMejora >= umbral1RM;
+        const hayEstancPesoReps = sesionsSinMejoraPesoReps >= umbralPesoReps;
+        if (hayEstanc1RM || hayEstancPesoReps) {
+          const sesionesAfectadas = hayEstancPesoReps
+            ? sesionsSinMejoraPesoReps
+            : totalSinMejora;
+          notifs.push({
+            tipo: rEstanc.tipo, titulo: rEstanc.titulo,
+            mensaje: interpolar(rEstanc.mensaje, {
+              ejercicio: nombre, valor: sesionesAfectadas,
+              porciento: 0, peso: ultima.peso
+            })
+          });
+        }
+      }
+
+      // 9. RACHA POSITIVA
+      const rRacha = RULES.find(r => r.id === 'racha_positiva');
+      if (rRacha && rRacha.activa && rachaPositiva >= rRacha.sesiones_racha) {
+        notifs.push({
+          tipo: rRacha.tipo, titulo: rRacha.titulo,
+          mensaje: interpolar(rRacha.mensaje, {
+            ejercicio: nombre, valor: rachaPositiva,
+            porciento: 0, peso: ultima.peso
+          })
+        });
+      }
+    }
+
+    return notifs;
+  }
+
+  function interpolar(texto, vars) {
+    return texto.replace(/\{(\w+)\}/g, (_, k) => vars[k] !== undefined ? vars[k] : `{${k}}`);
+  }
+
+  function redondearPeso(kg) {
+    return Math.round(kg / 2.5) * 2.5;
+  }
+
+  // ============================================================
+  // ===== RENDERIZAR NOTIFICACIONES ============================
+  // ============================================================
+
+  function renderNotificaciones() {
+    const container = document.getElementById('sp-notif-container');
+    if (!container) return;
+    container.innerHTML = '';
+    if (sesiones.length === 0) return;
+
+    const notifs = analizarSobrecargaProgresiva();
+    if (notifs.length === 0) return;
+
+    notifs.forEach((n, i) => {
+      const div = document.createElement('div');
+      div.className = `sp-notif-banner sp-${n.tipo}`;
+      div.innerHTML = `
+        <div class="sp-notif-header">
+          <span>${n.titulo}</span>
+          <button class="sp-notif-close" onclick="this.closest('.sp-notif-banner').remove()">✕</button>
+        </div>
+        <div class="sp-notif-body">${escapeHtml(n.mensaje)}</div>
+      `;
+      container.appendChild(div);
+    });
+  }
+
+  // ============================================================
+  // ===== PANEL DE CONFIGURACIÓN — RENDER =====================
+  // ============================================================
+
+  function renderConfigPanel() {
+    // Llenar valores generales
+    document.getElementById('cfg_minSesiones').value = CONFIG.minSesiones;
+    document.getElementById('cfg_ventana').value = CONFIG.ventana;
+    document.getElementById('cfg_diasDescansoExcesivo').value = CONFIG.diasDescansoExcesivo;
+    document.getElementById('cfg_diasOptimo').value = CONFIG.diasOptimo;
+    document.getElementById('cfg_sesionesRegresionAlerta').value = CONFIG.sesionesRegresionAlerta;
+    document.getElementById('cfg_semanasEstancamiento').value = CONFIG.semanasEstancamiento;
+
+    // Renderizar cards de reglas
+    const editor = document.getElementById('rules-editor');
+    editor.innerHTML = '';
+
+    RULES.forEach((rule, idx) => {
+      const card = document.createElement('div');
+      card.className = 'rule-card';
+      card.innerHTML = `
+        <div class="rule-card-header">
+          <span class="rule-badge rb-${rule.tipo}">${tipoLabel(rule.tipo)}</span>
+          <strong style="font-size:13px;">${escapeHtml(rule.titulo)}</strong>
+          <label class="toggle-rule">
+            <input type="checkbox" data-rule="${rule.id}" ${rule.activa ? 'checked' : ''}>
+            <span class="toggle-track"><span class="toggle-knob"></span></span>
+            <span class="toggle-label">${rule.activa ? 'Activa' : 'Inactiva'}</span>
+          </label>
+        </div>
+        <div class="config-grid">
+          <div class="config-group config-wide">
+            <label>Título de la notificación</label>
+            <input type="text" data-rule="${rule.id}" data-field="titulo" value="${escapeHtml(rule.titulo)}">
+          </div>
+          <div class="config-group config-wide">
+            <label>Mensaje (variables: {ejercicio} {valor} {peso} {porciento})</label>
+            <textarea data-rule="${rule.id}" data-field="mensaje">${escapeHtml(rule.mensaje)}</textarea>
+          </div>
+          ${renderRuleParams(rule, idx)}
+        </div>
+      `;
+      editor.appendChild(card);
+    });
+
+    // Bind checkboxes
+    editor.querySelectorAll('input[type=checkbox][data-rule]').forEach(cb => {
+      cb.addEventListener('change', function() {
+        const rule = RULES.find(r => r.id === this.dataset.rule);
+        if (rule) rule.activa = this.checked;
+        const label = this.closest('.toggle-rule').querySelector('.toggle-label');
+        if (label) label.textContent = this.checked ? 'Activa' : 'Inactiva';
+      });
+    });
+
+    // Bind campos de texto/textarea
+    editor.querySelectorAll('[data-rule][data-field]').forEach(el => {
+      el.addEventListener('input', function() {
+        const rule = RULES.find(r => r.id === this.dataset.rule);
+        if (rule) rule[this.dataset.field] = this.value;
+      });
+    });
+
+    // Bind parámetros numéricos
+    editor.querySelectorAll('[data-rule][data-param]').forEach(el => {
+      el.addEventListener('input', function() {
+        const rule = RULES.find(r => r.id === this.dataset.rule);
+        if (rule) rule[this.dataset.param] = parseFloat(this.value) || 0;
+      });
+    });
+
+    // Bind umbrales de reps por grupo muscular
+    editor.querySelectorAll('[data-rule][data-param-grupo]').forEach(el => {
+      el.addEventListener('input', function() {
+        const rule = RULES.find(r => r.id === this.dataset.rule);
+        if (rule) {
+          if (!rule.reps_por_grupo) rule.reps_por_grupo = {};
+          rule.reps_por_grupo[this.dataset.paramGrupo] = parseInt(this.value) || 10;
+        }
+      });
+    });
+  }
+
+  function renderRuleParams(rule) {
+    const paramFields = {
+      'subir_peso_reps': [
+        { param: 'rir_umbral', label: 'RIR mínimo para subir', hint: 'Si el RIR promedio es ≥ a este valor, el peso es demasiado fácil → sugerir subir. RIR 0 = fallo muscular, 1 = 1 rep en reserva, 3+ = demasiado margen, el peso no es retador.' },
+        { param: 'sesiones_consecutivas', label: 'Sesiones seguidas', hint: 'Cuántas sesiones consecutivas cumpliendo la condición.' },
+        { param: 'incremento_porciento', label: '% de incremento', hint: 'Porcentaje a sumar al peso actual.' },
+        { param: 'incremento_minimo_kg', label: 'Mínimo incremento (kg)', hint: 'Mínimo absoluto aunque el % sea pequeño.' },
+      ],
+      'subir_peso_reps_objetivo': null, // render especial abajo
+      'subir_reps_antes_peso': [
+        { param: 'umbral_crecimiento_vol', label: '% crecimiento de volumen', hint: 'Crecimiento mínimo de volumen para activar.' },
+        { param: 'sesiones_consecutivas', label: 'Sesiones consecutivas', hint: '' },
+      ],
+      'mantener_peso': [
+        { param: 'umbral_estabilidad', label: '±% para "estable"', hint: 'Variación máxima de volumen para considerar estancado.' },
+        { param: 'sesiones_consecutivas', label: 'Sesiones consecutivas', hint: '' },
+      ],
+      'bajar_peso_rir_alto': [
+        { param: 'rir_umbral_bajo', label: 'RIR máximo (cerca del fallo)', hint: 'Se activa cuando el RIR promedio es ≤ a este valor Y el volumen bajó varias sesiones. RIR 0 = fallo muscular, 1 = 1 rep en reserva, 2 = 2 reps en reserva. Un RIR bajo con volumen cayendo indica que el peso es demasiado alto.' },
+        { param: 'reduccion_porciento', label: '% de reducción', hint: '' },
+        { param: 'sesiones_consecutivas', label: 'Sesiones con volumen cayendo', hint: 'Cuántas sesiones consecutivas con volumen en baja para confirmar el patrón.' },
+      ],
+      'bajar_peso_regresion': [
+        { param: 'reduccion_porciento', label: '% de reducción', hint: '' },
+      ],
+      'descanso_excesivo': [
+        { param: 'reduccion_porciento', label: '% de reducción', hint: 'Cuánto bajar el peso al retomar tras un descanso largo.' },
+      ],
+      'descanso_corto': [
+        { param: 'umbral_descanso_alto', label: 'Descanso alto (seg)', hint: 'Segundos de descanso que disparan la sugerencia.' },
+      ],
+      'racha_positiva': [
+        { param: 'sesiones_racha', label: 'Sesiones en racha', hint: 'Cuántas sesiones seguidas mejorando para felicitar.' },
+      ],
+      'estancamiento': [
+        { param: 'sesiones_sin_mejora_peso_reps', label: 'Sesiones sin mejorar peso/reps', hint: 'Sesiones consecutivas sin superar el peso ni las repeticiones totales. Se combina con el parámetro global de semanas sin mejorar 1RM.' },
+      ],
+    };
+
+    const params = paramFields[rule.id];
+    if (params === null && rule.id === 'subir_peso_reps_objetivo') {
+      // Render especial: umbrales por grupo muscular
+      const grupos = ['Pecho','Espalda','Piernas','Hombros','Brazos','Core'];
+      const gruposHTML = grupos.map(g => `
+        <div class="config-group">
+          <label>Reps objetivo — ${g}</label>
+          <input type="number" step="1" min="1" max="50"
+            data-rule="${rule.id}" data-param-grupo="${g}"
+            value="${rule.reps_por_grupo && rule.reps_por_grupo[g] !== undefined ? rule.reps_por_grupo[g] : 10}">
+        </div>
+      `).join('');
+      return `
+        <div class="config-group config-wide" style="grid-column:1/-1">
+          <div class="hint" style="margin-bottom:8px">⚙️ Reps objetivo por grupo muscular — la notificación se activa cuando el cliente iguala o supera este número en al menos N series.</div>
+        </div>
+        ${gruposHTML}
+        <div class="config-group">
+          <label>% mínimo de series que deben cumplir</label>
+          <input type="number" step="5" min="1" max="100" data-rule="${rule.id}" data-param="series_minimas_pct" value="${rule.series_minimas_pct || 75}">
+          <div class="hint">Ej: 75% → en 4 series necesita 3, en 3 series necesita 2, en 2 series necesita 2. Se adapta automáticamente al número de series del ejercicio.</div>
+        </div>
+        <div class="config-group">
+          <label>Sesiones consecutivas</label>
+          <input type="number" step="1" min="1" data-rule="${rule.id}" data-param="sesiones_consecutivas" value="${rule.sesiones_consecutivas || 2}">
+        </div>
+        <div class="config-group">
+          <label>% de incremento</label>
+          <input type="number" step="0.5" data-rule="${rule.id}" data-param="incremento_porciento" value="${rule.incremento_porciento || 5}">
+        </div>
+        <div class="config-group">
+          <label>Mínimo incremento (kg)</label>
+          <input type="number" step="0.5" data-rule="${rule.id}" data-param="incremento_minimo_kg" value="${rule.incremento_minimo_kg || 2.5}">
+        </div>
+      `;
+    }
+    if (!params) return '';
+
+    return params.map(p => `
+      <div class="config-group">
+        <label>${escapeHtml(p.label)}</label>
+        <input type="number" step="0.5" data-rule="${rule.id}" data-param="${p.param}" value="${rule[p.param] !== undefined ? rule[p.param] : ''}">
+        ${p.hint ? `<div class="hint">${escapeHtml(p.hint)}</div>` : ''}
+      </div>
+    `).join('');
+  }
+
+  function tipoLabel(tipo) {
+    const m = { subir: '⬆️ Subir', bajar: '⬇️ Bajar', mantener: '= Mantener', descanso: '😴 Descanso', cambio: '🔄 Cambio', info: 'ℹ️ Info' };
+    return m[tipo] || tipo;
+  }
+
+  // ============================================================
+  // ===== MODAL =================
+  // ============================================================
+  let modalCallback = null;
+  function mostrarModal(title, msg, onConfirm) {
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalMsg').textContent = msg;
+    modalCallback = onConfirm;
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+  document.getElementById('modalConfirmBtn').addEventListener('click', function() {
+    document.getElementById('modalOverlay').classList.remove('open');
+    if (typeof modalCallback === 'function') modalCallback();
+    modalCallback = null;
+  });
+  document.getElementById('modalCancelBtn').addEventListener('click', function() {
+    document.getElementById('modalOverlay').classList.remove('open');
+    modalCallback = null;
+  });
+  document.getElementById('modalOverlay').addEventListener('click', function(e) {
+    if (e.target === this) { this.classList.remove('open'); modalCallback = null; }
+  });
+
+  // ===== TOAST =====
+  let toastTimer = null;
+  function toast(msg, tipo) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = '';
+    t.classList.add('show');
+    if (tipo === 'success') t.classList.add('toast-success');
+    else if (tipo === 'error') t.classList.add('toast-error');
+    else t.classList.add('toast-info');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  // ===== BANNER DE VALIDACIÓN =====
+  function mostrarError(msg) {
+    const banner = document.getElementById('validationBanner');
+    document.getElementById('validationMsg').textContent = '⚠️ ' + msg;
+    banner.classList.add('show');
+    try { banner.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) { banner.scrollIntoView(true); }
+    if (navigator.vibrate) navigator.vibrate(80);
+  }
+  function ocultarError() {
+    document.getElementById('validationBanner').classList.remove('show');
+    document.querySelectorAll('.input-error').forEach(el => el.classList.remove('input-error'));
+  }
+  function highlightField(field, idx) {
+    const el = document.querySelector(`[data-field="${field}"][data-idx="${idx}"]`);
+    if (el) {
+      el.classList.add('input-error');
+      try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) { el.scrollIntoView(true); }
+    }
+  }
+
+  // ===== FECHAS =====
+  function parsearFechaISO(fechaISO) {
+    if (!fechaISO) return null;
+    const partes = String(fechaISO).split('-');
+    if (partes.length !== 3) return null;
+    const anio = parseInt(partes[0], 10), mes = parseInt(partes[1], 10) - 1, dia = parseInt(partes[2], 10);
+    if (isNaN(anio) || isNaN(mes) || isNaN(dia)) return null;
+    return new Date(anio, mes, dia);
+  }
+  function obtenerFechaInicioCiclo() { return storageGet(CICLO_KEY); }
+  function establecerFechaInicioCiclo(fechaISO) { storageSet(CICLO_KEY, fechaISO); }
+  function haPasadoElPlazo() {
+    const inicio = obtenerFechaInicioCiclo();
+    if (!inicio) return false;
+    const fechaInicio = parsearFechaISO(inicio);
+    if (!fechaInicio || isNaN(fechaInicio.getTime())) return false;
+    const hoy = new Date();
+    const hoyLocal = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    return (hoyLocal - fechaInicio) / (1000 * 60 * 60 * 24) > 31;
+  }
+
+  // ===== FUNCIONES BASE =====
+  function volumenEjercicio(ej) { return ej.peso * ej.repsArray.reduce((a,b) => a+b, 0); }
+  function mejor1RM(ej) {
+    if (!ej.repsArray.length) return 0;
+    return Math.max(...ej.repsArray.map(reps => ej.peso * (1 + reps / 30)));
+  }
+  function saveData() { storageSet(STORAGE_KEY, JSON.stringify(sesiones)); }
+  function updateNextIds() {
+    nextSesionId = sesiones.length ? Math.max(...sesiones.map(s => s.id)) + 1 : 1;
+    let maxEj = 0;
+    sesiones.forEach(s => s.ejercicios.forEach(e => { if (e.id_ej > maxEj) maxEj = e.id_ej; }));
+    nextEjercicioId = maxEj + 1;
+  }
+  function obtenerTodosEjercicios() {
+    const set = new Set();
+    sesiones.forEach(s => s.ejercicios.forEach(e => set.add(e.nombre)));
+    return Array.from(set).sort();
+  }
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // ===== DATOS =====
+  function obtenerFilas(ejercicioFiltro) {
+    const filas = [];
+    for (let s of sesiones) {
+      for (let e of s.ejercicios) {
+        if (!ejercicioFiltro || e.nombre === ejercicioFiltro) {
+          filas.push({
+            fecha: s.fecha, ejercicio: e.nombre, grupo: e.grupo,
+            repsArray: e.repsArray, peso: e.peso, series: e.repsArray.length,
+            rpe: e.rpe, descanso: e.descanso, notas_ej: e.notas_ej,
+            id_sesion: s.id, id_ej: e.id_ej,
+            volumen: volumenEjercicio(e), rm: mejor1RM(e)
+          });
+        }
+      }
+    }
+    filas.sort((a,b) => a.fecha.localeCompare(b.fecha));
+    return filas;
+  }
+
+  // ===== MÉTRICAS =====
+  function renderMetrics() {
+    const ejercicioFiltro = document.getElementById('ejercicioSelect').value;
+    const filas = obtenerFilas(ejercicioFiltro);
+    let mejor1RMGlobal = 0, ultimoVolumen = 0, ejerciciosUnicos = new Set(), sumaRPE = 0, countRPE = 0;
+    for (let f of filas) {
+      if (f.rm > mejor1RMGlobal) mejor1RMGlobal = f.rm;
+      ejerciciosUnicos.add(f.ejercicio);
+      sumaRPE += f.rpe; countRPE++;
+      if (f === filas[filas.length-1]) ultimoVolumen = f.volumen;
+    }
+    const avgRpe = countRPE ? (sumaRPE / countRPE).toFixed(1) : '—';
+    const count = ejercicioFiltro ? filas.length : ejerciciosUnicos.size;
+    document.getElementById('metrics').innerHTML = `
+      <div class="mcard"><div class="mcard-label">Mejor 1RM estimado</div><div class="mcard-value">${mejor1RMGlobal > 0 ? mejor1RMGlobal.toFixed(1) : '—'} kg</div></div>
+      <div class="mcard"><div class="mcard-label">Volumen última sesión</div><div class="mcard-value">${ultimoVolumen > 0 ? ultimoVolumen.toLocaleString() : '—'} kg</div></div>
+      <div class="mcard"><div class="mcard-label">${ejercicioFiltro ? 'Sesiones' : 'Ejercicios'}</div><div class="mcard-value">${count}</div></div>
+      <div class="mcard"><div class="mcard-label">RIR promedio</div><div class="mcard-value">${avgRpe}</div></div>
+    `;
+    document.getElementById('headerCount').textContent = sesiones.length + ' sesión' + (sesiones.length !== 1 ? 'es' : '');
+  }
+
+  // ===== HISTORIAL =====
+  function renderHistorial() {
+    const ejercicioFiltro = document.getElementById('ejercicioSelect').value;
+    const filas = obtenerFilas(ejercicioFiltro);
+    const tbody = document.getElementById('histBody');
+    if (!filas.length) {
+      tbody.innerHTML = `<tr><td colspan="13" class="empty"><p>No hay sesiones registradas.</p><p>Toca <strong>+ Sesión</strong> para empezar.</p></td></tr>`;
+      return;
+    }
+    const mapPorEjercicio = new Map();
+    for (let f of filas) {
+      const key = f.ejercicio.toLowerCase();
+      if (!mapPorEjercicio.has(key)) mapPorEjercicio.set(key, []);
+      mapPorEjercicio.get(key).push(f);
+    }
+    let html = '';
+    for (let f of filas) {
+      const key = f.ejercicio.toLowerCase();
+      const lista = mapPorEjercicio.get(key);
+      const idx = lista.findIndex(item => item.fecha === f.fecha && item.id_ej === f.id_ej);
+      const prev = idx > 0 ? lista[idx-1] : null;
+      let deltaHtml = '<span class="delta-eq">—</span>';
+      if (prev) {
+        const diff = f.volumen - prev.volumen;
+        const percent = (diff / prev.volumen) * 100;
+        if (percent > 0.05) deltaHtml = `<span class="delta-up">▲ ${percent.toFixed(1)}%</span>`;
+        else if (percent < -0.05) deltaHtml = `<span class="delta-dn">▼ ${Math.abs(percent).toFixed(1)}%</span>`;
+        else deltaHtml = `<span class="delta-eq">= 0%</span>`;
+      }
+      const fechaForm = f.fecha.split('-').reverse().join('/');
+      const repsStr = f.repsArray.join(', ');
+      const sesion = sesiones.find(s => s.id === f.id_sesion);
+      const puedeEliminar = sesion && sesion.ejercicios.length > 1;
+      const btnEliminar = `<button class="del-btn" onclick="eliminarEjercicio(${f.id_sesion}, ${f.id_ej})" title="${puedeEliminar ? 'Eliminar ejercicio' : 'No se puede eliminar el único ejercicio'}" ${!puedeEliminar ? 'style="opacity:0.3;pointer-events:none;"' : ''}>✕</button>`;
+      html += `<tr>
+        <td style="white-space:nowrap">${fechaForm}</td>
+        <td style="font-weight:600; white-space:nowrap">${escapeHtml(f.ejercicio)}</td>
+        <td><span class="badge badge-${f.grupo}">${f.grupo}</span></td>
+        <td class="center">${f.series}</td>
+        <td class="center">${repsStr}</td>
+        <td class="center">${f.peso}</td>
+        <td class="center">${f.rpe}</td>
+        <td class="center">${f.descanso}s</td>
+        <td class="num">${f.volumen.toLocaleString()}</td>
+        <td class="num">${f.rm.toFixed(1)}</td>
+        <td class="center">${deltaHtml}</td>
+        <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(f.notas_ej || '')}</td>
+        <td class="center">${btnEliminar}</td>
+      </tr>`;
+    }
+    tbody.innerHTML = html;
+  }
+
+  // ===== GRÁFICA =====
+  function renderChart() {
+    const ejercicio = document.getElementById('ejercicioSelect').value;
+    if (!ejercicio) { toast('Selecciona un ejercicio para ver la progresión', 'info'); return; }
+    document.getElementById('chartTitle').textContent = 'Progresión — ' + ejercicio;
+    const filas = obtenerFilas(ejercicio);
+    const labels = filas.map(f => f.fecha.split('-').reverse().slice(0,2).join('/'));
+    const volData = filas.map(f => f.volumen);
+    const rmData = filas.map(f => f.rm);
+    if (chart) chart.destroy();
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const gridColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+    const labelColor = isDark ? '#a0a09c' : '#6b6b67';
+    chart = new Chart(document.getElementById('mainChart'), {
+      data: {
+        labels,
+        datasets: [
+          { type: 'bar', label: 'Volumen (kg)', data: volData, backgroundColor: isDark ? '#185FA5' : '#B5D4F4', borderColor: '#378ADD', borderWidth: 1, yAxisID: 'y' },
+          { type: 'line', label: '1RM estimado', data: rmData, borderColor: '#1D9E75', backgroundColor: 'transparent', borderWidth: 2.5, pointBackgroundColor: '#1D9E75', pointRadius: 5, tension: 0.3, yAxisID: 'y2' }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString() + ' kg' } }
+        },
+        scales: {
+          x: { ticks: { color: labelColor, maxRotation: 45 }, grid: { color: gridColor } },
+          y: { title: { display: true, text: 'Volumen (kg)', color: '#378ADD' }, ticks: { color: '#378ADD' }, grid: { color: gridColor } },
+          y2: { position: 'right', title: { display: true, text: '1RM est. (kg)', color: '#1D9E75' }, ticks: { color: '#1D9E75' }, grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  // ===== FORMULARIO DINÁMICO =====
+  function parseRepsString(str) {
+    if (!str) return [];
+    return str.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n > 0);
+  }
+  function renderRepsList(ej, idx) {
+    let arr = ej.repsArray;
+    if (!arr || arr.length === 0) arr = parseRepsString(ej.repsStr);
+    if (!arr || arr.length === 0) arr = [10, 10, 10];
+    let html = '';
+    arr.forEach((reps, s) => {
+      html += `<div class="serie-row">
+        <span class="serie-label">Serie ${s+1}</span>
+        <button type="button" class="reps-btn reps-minus" data-idx="${idx}" data-s="${s}">−</button>
+        <span class="reps-val" id="repsval_${idx}_${s}">${reps}</span>
+        <button type="button" class="reps-btn reps-plus" data-idx="${idx}" data-s="${s}">+</button>
+        <span class="reps-unit">reps</span>
+      </div>`;
+    });
+    return html;
+  }
+  function getRepsArray(ej) {
+    if (ej.repsArray && ej.repsArray.length > 0) return ej.repsArray;
+    const parsed = parseRepsString(ej.repsStr);
+    return parsed.length > 0 ? parsed : [10, 10, 10];
+  }
+  function setSeriesCount(idx, n) {
+    const ej = tempEjercicios[idx];
+    const current = getRepsArray(ej);
+    const newArr = [];
+    for (let i = 0; i < n; i++) newArr.push(current[i] !== undefined ? current[i] : (current[current.length-1] || 10));
+    ej.repsArray = newArr;
+    ej.repsStr = newArr.join(',');
+    const list = document.getElementById('repslist_' + idx);
+    if (list) list.innerHTML = renderRepsList(ej, idx);
+    const builder = document.querySelector(`.series-builder[data-idx="${idx}"]`);
+    if (builder) builder.querySelectorAll('.series-n-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.n) === n));
+    const prev = document.getElementById('preview_' + idx);
+    if (prev) prev.innerHTML = calcularPreview(ej);
+    ocultarError();
+  }
+  function cambiarReps(idx, s, delta) {
+    const ej = tempEjercicios[idx];
+    if (!ej.repsArray || ej.repsArray.length === 0) ej.repsArray = getRepsArray(ej);
+    const nuevo = Math.max(1, Math.min(50, (ej.repsArray[s] || 10) + delta));
+    ej.repsArray[s] = nuevo;
+    ej.repsStr = ej.repsArray.join(',');
+    const valEl = document.getElementById(`repsval_${idx}_${s}`);
+    if (valEl) valEl.textContent = nuevo;
+    const prev = document.getElementById('preview_' + idx);
+    if (prev) prev.innerHTML = calcularPreview(ej);
+    ocultarError();
+  }
+  window.setSeriesCount = setSeriesCount;
+  window.cambiarReps = cambiarReps;
+
+  function calcularPreview(ej) {
+    const repsArray = (ej.repsArray && ej.repsArray.length > 0) ? ej.repsArray : parseRepsString(ej.repsStr);
+    if (!ej.nombre || !ej.peso || repsArray.length === 0) return '<span style="color:var(--text3);">Completa ejercicio, peso y repeticiones.</span>';
+    const sumaReps = repsArray.reduce((a,b) => a+b, 0);
+    const volumen = ej.peso * sumaReps;
+    const maxReps = Math.max(...repsArray);
+    const rm = ej.peso * (1 + maxReps / 30);
+    return `Volumen: <span>${volumen.toLocaleString()} kg</span> · 1RM estimado: <span>${rm.toFixed(1)} kg</span> · Series: <span>${repsArray.length}</span> · Reps totales: <span>${sumaReps}</span>`;
+  }
+
+  function renderFormulario() {
+    const oldContainer = document.getElementById('ejerciciosContainer');
+    if (!oldContainer) return;
+    const container = oldContainer.cloneNode(false);
+    oldContainer.parentNode.replaceChild(container, oldContainer);
+    if (tempEjercicios.length === 0) {
+      container.innerHTML = '<div class="empty" style="padding:1rem 0">Sin ejercicios. Toca <strong>"+ Agregar ejercicio"</strong>.</div>';
+      return;
+    }
+    let html = '';
+    tempEjercicios.forEach((ej, idx) => {
+      const mostrarEliminar = MODO_CLIENTE ? tempEjercicios.length > 1 : true;
+      const btnEliminar = mostrarEliminar ? `<button class="remove-ejercicio" data-idx="${idx}" title="Eliminar ejercicio">✕</button>` : '';
+      html += `<div class="ejercicio-group">
+        ${btnEliminar}
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Ejercicio</label>
+            <input type="text" placeholder="" value="${escapeHtml(ej.nombre)}" data-field="nombre" data-idx="${idx}">
+          </div>
+          <div class="form-group">
+            <label>Grupo muscular</label>
+            <select data-field="grupo" data-idx="${idx}">
+              ${['Pecho','Espalda','Piernas','Hombros','Brazos','Core'].map(g => `<option value="${g}" ${ej.grupo===g?'selected':''}>${g}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group form-wide">
+            <label>Series y repeticiones</label>
+            <div class="series-builder" data-idx="${idx}">
+              <div class="series-count-row">
+                <span class="series-count-label">Cantidad de series:</span>
+                <div class="series-count-btns">
+                  ${[2,3,4,5,6,7,8].map(n => {
+                    const current = (ej.repsArray && ej.repsArray.length === n) || (!ej.repsArray && parseRepsString(ej.repsStr).length === n);
+                    return `<button type="button" class="series-n-btn${current?' active':''}" data-idx="${idx}" data-n="${n}">${n}</button>`;
+                  }).join('')}
+                </div>
+              </div>
+              <div class="series-reps-list" id="repslist_${idx}">${renderRepsList(ej, idx)}</div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Peso (kg)</label>
+            <input type="number" inputmode="decimal" step="0.5" placeholder="" value="${ej.peso||''}" data-field="peso" data-idx="${idx}">
+          </div>
+          <div class="form-group">
+            <label>RIR (0-10)</label>
+            <input type="number" inputmode="decimal" step="0.5" min="0" max="10" placeholder="" value="${ej.rpe!==undefined&&ej.rpe!==''?ej.rpe:''}" data-field="rpe" data-idx="${idx}">
+          </div>
+          <div class="form-group">
+            <label>Descanso (seg)</label>
+            <input type="number" inputmode="numeric" step="15" placeholder="" value="${ej.descanso||''}" data-field="descanso" data-idx="${idx}">
+          </div>
+          <div class="form-group form-wide">
+            <label>Notas (opcional)</label>
+            <textarea placeholder="Técnica, sensaciones..." data-field="notas_ej" data-idx="${idx}">${escapeHtml(ej.notas_ej||'')}</textarea>
+          </div>
+        </div>
+        <div class="f-preview" id="preview_${idx}">${calcularPreview(ej)}</div>
+      </div>`;
+    });
+    container.innerHTML = html;
+    container.querySelectorAll('[data-field]').forEach(el => {
+      const ev = el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' ? 'change' : 'input';
+      el.addEventListener(ev, function() {
+        const idx = parseInt(this.dataset.idx), field = this.dataset.field;
+        let val = this.value;
+        if (field === 'peso') val = parseFloat(val) || '';
+        else if (field === 'rpe') val = val === '' ? '' : parseFloat(val);
+        else if (field === 'descanso') val = parseInt(val) || '';
+        tempEjercicios[idx][field] = val;
+        const prev = document.getElementById('preview_' + idx);
+        if (prev) prev.innerHTML = calcularPreview(tempEjercicios[idx]);
+        ocultarError();
+      });
+    });
+    container.querySelectorAll('.series-n-btn').forEach(btn => {
+      btn.addEventListener('click', function() { setSeriesCount(parseInt(this.dataset.idx), parseInt(this.dataset.n)); });
+    });
+    container.addEventListener('click', function(e) {
+      const minus = e.target.closest('.reps-minus');
+      const plus = e.target.closest('.reps-plus');
+      if (minus) cambiarReps(parseInt(minus.dataset.idx), parseInt(minus.dataset.s), -1);
+      if (plus) cambiarReps(parseInt(plus.dataset.idx), parseInt(plus.dataset.s), 1);
+    });
+    container.querySelectorAll('.remove-ejercicio').forEach(btn => {
+      btn.addEventListener('click', function() { eliminarTempEjercicio(parseInt(this.dataset.idx)); });
+    });
+  }
+
+  function eliminarTempEjercicio(idx) {
+    if (MODO_CLIENTE && tempEjercicios.length <= 1) { toast('Debe haber al menos un ejercicio en la sesión', 'error'); return; }
+    tempEjercicios.splice(idx, 1);
+    renderFormulario();
+  }
+  function agregarEjercicioAlForm() {
+    tempEjercicios.push({ nombre: "", grupo: "Pecho", peso: '', repsStr: "10,10,10", repsArray: [10,10,10], rpe: '', descanso: '', notas_ej: "" });
+    renderFormulario();
+    setTimeout(() => {
+      const grupos = document.querySelectorAll('.ejercicio-group');
+      if (grupos.length > 0) grupos[grupos.length-1].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+  }
+
+  // ===== GUARDAR SESIÓN =====
+  function guardarSesion() {
+    ocultarError();
+    if (haPasadoElPlazo()) { mostrarError('Plantilla bloqueada. Han pasado más de 31 días. Contacta a tu entrenador.'); return; }
+    const fecha = document.getElementById('fecha_sesion').value;
+    if (!fecha) {
+      mostrarError('Selecciona una fecha para la sesión.');
+      document.getElementById('fecha_sesion').classList.add('input-error');
+      document.getElementById('fecha_sesion').focus();
+      return;
+    }
+    document.getElementById('fecha_sesion').classList.remove('input-error');
+    if (tempEjercicios.length === 0) { mostrarError('Agrega al menos un ejercicio antes de guardar.'); return; }
+    for (let i = 0; i < tempEjercicios.length; i++) {
+      const ej = tempEjercicios[i];
+      const num = i + 1;
+      if (!ej.nombre || !ej.nombre.trim()) { mostrarError(`Ejercicio ${num}: ingresa el nombre del ejercicio.`); highlightField('nombre', i); return; }
+      const repsArray = (ej.repsArray && ej.repsArray.length > 0) ? ej.repsArray : parseRepsString(ej.repsStr);
+      if (repsArray.length === 0) { mostrarError(`Ejercicio ${num} ("${ej.nombre}"): ingresá al menos una serie.`); highlightField('repsStr', i); return; }
+      if (!ej.peso || Number(ej.peso) <= 0) { mostrarError(`Ejercicio ${num} ("${ej.nombre}"): el peso debe ser mayor a 0 kg.`); highlightField('peso', i); return; }
+      if (ej.rpe === '' || ej.rpe === undefined || isNaN(ej.rpe) || Number(ej.rpe) < 0 || Number(ej.rpe) > 10) {
+        mostrarError(`Ejercicio ${num} ("${ej.nombre}"): el RIR debe estar entre 0 y 10.`); highlightField('rpe', i); return;
+      }
+      if (!ej.descanso || Number(ej.descanso) < 30) { mostrarError(`Ejercicio ${num} ("${ej.nombre}"): el descanso mínimo es 30 segundos.`); highlightField('descanso', i); return; }
+    }
+    if (sesiones.length === 0 && !obtenerFechaInicioCiclo()) establecerFechaInicioCiclo(fecha);
+    const ejerciciosGuardar = tempEjercicios.map(ej => {
+      const nombreNorm = ej.nombre.trim().charAt(0).toUpperCase() + ej.nombre.trim().slice(1).toLowerCase();
+      return {
+        id_ej: nextEjercicioId++,
+        nombre: nombreNorm, grupo: ej.grupo, peso: Number(ej.peso),
+        repsArray: (ej.repsArray && ej.repsArray.length > 0) ? ej.repsArray : parseRepsString(ej.repsStr),
+        rpe: Number(ej.rpe), descanso: Number(ej.descanso), notas_ej: ej.notas_ej || ""
+      };
+    });
+    sesiones.push({ id: nextSesionId++, fecha, notas_sesion: document.getElementById('notas_sesion').value, ejercicios: ejerciciosGuardar });
+    saveData();
+    tempEjercicios = [];
+    document.getElementById('fecha_sesion').value = getTodayISO();
+    document.getElementById('notas_sesion').value = '';
+    renderFormulario();
+    ocultarError();
+    updateSelect();
+    switchTab('hist');
+    renderAll();
+    toast(`✅ Sesión guardada con ${ejerciciosGuardar.length} ejercicio${ejerciciosGuardar.length !== 1 ? 's' : ''}`, 'success');
+  }
+
+  function getTodayISO() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  // ===== ELIMINAR =====
+  function eliminarEjercicio(idSesion, idEj) {
+    const sesion = sesiones.find(s => s.id === idSesion);
+    if (!sesion) { toast('No se encontró la sesión', 'error'); return; }
+    if (MODO_CLIENTE && sesion.ejercicios.length <= 1) { toast('No puedes eliminar el único ejercicio de la sesión', 'error'); return; }
+    const ej = sesion.ejercicios.find(e => e.id_ej === idEj);
+    const nombre = ej ? ej.nombre : 'este ejercicio';
+    mostrarModal('¿Eliminar ejercicio?', `Se eliminará "${nombre}" de la sesión del ${sesion.fecha.split('-').reverse().join('/')}. Esta acción no se puede deshacer.`, function() {
+      const sesRef = sesiones.find(s => s.id === idSesion);
+      if (sesRef) {
+        sesRef.ejercicios = sesRef.ejercicios.filter(e => e.id_ej !== idEj);
+        if (sesRef.ejercicios.length === 0) { sesiones = sesiones.filter(s => s.id !== idSesion); toast('Sesión eliminada (sin ejercicios)', 'info'); }
+        else toast(`✅ Ejercicio "${nombre}" eliminado`, 'success');
+        saveData(); updateSelect(); renderAll();
+      }
+    });
+  }
+
+  // ===== BORRAR TODO =====
+  function clearAll() {
+    if (MODO_CLIENTE) return;
+    mostrarModal('¿Borrar TODOS los datos?', 'Se eliminarán todas las sesiones y ejercicios registrados. Esta acción es irreversible.', function() {
+      sesiones = [];
+      storageRemove(STORAGE_KEY); storageRemove(CICLO_KEY);
+      updateSelect(); renderAll(); toast('Todos los datos borrados', 'info');
+    });
+  }
+
+  // ===== NAVEGACIÓN =====
+  function switchTab(tab) {
+    if (tab === 'add' && haPasadoElPlazo()) { toast('⛔ Han pasado más de 31 días. Contacta a tu entrenador.', 'error'); return; }
+    activeTab = tab;
+    document.getElementById('panel-hist').style.display  = tab === 'hist'   ? 'block' : 'none';
+    document.getElementById('panel-chart').style.display = tab === 'chart'  ? 'block' : 'none';
+    document.getElementById('panel-add').style.display   = tab === 'add'    ? 'block' : 'none';
+    document.getElementById('panel-config').style.display= tab === 'config' ? 'block' : 'none';
+    document.getElementById('tab-hist').classList.toggle('active', tab === 'hist');
+    document.getElementById('tab-chart').classList.toggle('active', tab === 'chart');
+    document.getElementById('tab-add').classList.toggle('active', tab === 'add');
+    document.getElementById('tab-config').classList.toggle('active', tab === 'config');
+    // Ocultar notificaciones en config
+    document.getElementById('sp-notif-container').style.display = tab === 'config' ? 'none' : 'block';
+    if (tab === 'chart') renderChart();
+    else if (tab === 'add') {
+      if (tempEjercicios.length === 0) agregarEjercicioAlForm();
+      const fi = document.getElementById('fecha_sesion');
+      if (fi && !fi.value) fi.value = getTodayISO();
+      ocultarError();
+    } else if (tab === 'hist') renderHistorial();
+    else if (tab === 'config') renderConfigPanel();
+  }
+
+  function updateSelect() {
+    const sel = document.getElementById('ejercicioSelect');
+    const prev = sel.value;
+    const nombres = obtenerTodosEjercicios();
+    sel.innerHTML = '<option value="">Todos los ejercicios</option>' +
+      nombres.map(n => `<option value="${n}" ${n===prev?'selected':''}>${escapeHtml(n)}</option>`).join('');
+  }
+
+  function mostrarAvisoBloqueo() {
+    const aviso = document.getElementById('avisoBloqueo');
+    const bloqueado = haPasadoElPlazo() && sesiones.length > 0;
+    aviso.style.display = bloqueado ? 'block' : 'none';
+    document.getElementById('tab-add').classList.toggle('tab-disabled', bloqueado);
+  }
+
+  function renderAll() {
+    updateSelect();
+    mostrarAvisoBloqueo();
+    renderMetrics();
+    if (activeTab === 'hist') renderHistorial();
+    if (activeTab === 'chart') renderChart();
+    renderNotificaciones();
+
+  }
+
+  // ===== STORAGE SEGURO =====
+  var _localStorageDisponible = (function() {
+    try { var t='__test__'; localStorage.setItem(t,t); localStorage.removeItem(t); return true; } catch(e) { return false; }
+  })();
+  var _memoriaFallback = {};
+  function storageGet(key) { return _localStorageDisponible ? localStorage.getItem(key) : (_memoriaFallback[key] !== undefined ? _memoriaFallback[key] : null); }
+  function storageSet(key, value) { if (_localStorageDisponible) localStorage.setItem(key, value); else _memoriaFallback[key] = value; }
+  function storageRemove(key) { if (_localStorageDisponible) localStorage.removeItem(key); else delete _memoriaFallback[key]; }
+
+  if (!_localStorageDisponible) {
+    var avisoStorage = document.createElement('div');
+    avisoStorage.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#cc0000;color:#fff;padding:14px 16px;font-size:14px;font-weight:700;text-align:center;line-height:1.5;';
+    avisoStorage.innerHTML = '⚠️ Para que la app guarde tus datos, abrí este archivo en <strong>Safari</strong>.<br><span style="font-weight:400;font-size:13px;">Tocá el ícono de compartir → "Abrir en Safari"</span>';
+    document.body.insertBefore(avisoStorage, document.body.firstChild);
+  }
+
+  function loadData() {
+    try {
+      const saved = storageGet(STORAGE_KEY);
+      if (saved) {
+        sesiones = JSON.parse(saved);
+        let changed = false;
+        for (let s of sesiones) {
+          for (let e of s.ejercicios) {
+            const orig = e.nombre;
+            const norm = orig.trim().charAt(0).toUpperCase() + orig.trim().slice(1).toLowerCase();
+            if (orig !== norm) { e.nombre = norm; changed = true; }
+          }
+        }
+        if (changed) saveData();
+        updateNextIds();
+      } else {
+        sesiones = []; updateNextIds();
+      }
+      if (sesiones.length > 0 && !obtenerFechaInicioCiclo()) {
+        const fechas = sesiones.map(s => s.fecha).sort();
+        establecerFechaInicioCiclo(fechas[0]);
+      }
+    } catch(e) { console.error('Error cargando datos:', e); sesiones = []; updateNextIds(); }
+  }
+
+  // ===== GENERADOR DE LINKS =====
+  function abrirPanelLink() { document.getElementById('panelGenerarLink').style.display = 'block'; document.getElementById('inputNombreCliente').focus(); previsualizarLink(); }
+  function cerrarPanelLink() { document.getElementById('panelGenerarLink').style.display = 'none'; }
+  function sanitizarNombre(nombre) { return nombre.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9_-]/g,'').substring(0,40); }
+  function generarLink(nombre) {
+    const id = sanitizarNombre(nombre);
+    if (!id) return '';
+    // Serializar config actual en base64 para heredarla al cliente
+    const cfgPayload = btoa(unescape(encodeURIComponent(JSON.stringify({ config: CONFIG, rules: RULES }))));
+    return window.location.origin + window.location.pathname + '?c=' + id + '&cfg=' + cfgPayload;
+  }
+  function previsualizarLink() {
+    const nombre = document.getElementById('inputNombreCliente').value;
+    const preview = document.getElementById('previewLink');
+    const link = generarLink(nombre);
+    if (link) { preview.style.display = 'block'; preview.textContent = link; }
+    else preview.style.display = 'none';
+  }
+  function copiarLinkCliente() {
+    const nombre = document.getElementById('inputNombreCliente').value;
+    const link = generarLink(nombre);
+    if (!link) { toast('Ingresá el nombre del cliente primero', 'error'); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(() => toast('✅ Link copiado — mandáselo al cliente por WhatsApp', 'success')).catch(() => copiarFallback(link));
+    } else copiarFallback(link);
+  }
+  function copiarFallback(texto) {
+    const ta = document.createElement('textarea');
+    ta.value = texto; ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0;';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand('copy'); toast('✅ Link copiado — mandáselo al cliente por WhatsApp', 'success'); }
+    catch(e) { toast('No se pudo copiar — copiá el link manualmente', 'error'); }
+    document.body.removeChild(ta);
+  }
+  window.previsualizarLink = previsualizarLink;
+  window.copiarLinkCliente = copiarLinkCliente;
+  window.cerrarPanelLink   = cerrarPanelLink;
+
+  // ===== INICIALIZACIÓN =====
+  loadData();
+  loadConfig();
+
+  // Tabs
+  document.getElementById('tab-hist').addEventListener('click', () => switchTab('hist'));
+  document.getElementById('tab-chart').addEventListener('click', () => switchTab('chart'));
+  document.getElementById('tab-add').addEventListener('click', () => switchTab('add'));
+  document.getElementById('tab-config').addEventListener('click', () => switchTab('config'));
+
+  // Selector de ejercicio
+  document.getElementById('ejercicioSelect').addEventListener('change', () => renderAll());
+
+  // Botones formulario
+  document.getElementById('agregarEjercicioBtn').addEventListener('click', agregarEjercicioAlForm);
+  document.getElementById('guardarSesionBtn').addEventListener('click', guardarSesion);
+  document.getElementById('cancelarBtn').addEventListener('click', () => switchTab('hist'));
+
+  // Botón guardar config
+  document.getElementById('saveConfigBtn').addEventListener('click', function() {
+    // Leer valores generales desde el DOM
+    CONFIG.minSesiones = parseInt(document.getElementById('cfg_minSesiones').value) || DEFAULT_CONFIG.minSesiones;
+    CONFIG.ventana = parseInt(document.getElementById('cfg_ventana').value) || DEFAULT_CONFIG.ventana;
+    CONFIG.diasDescansoExcesivo = parseInt(document.getElementById('cfg_diasDescansoExcesivo').value) || DEFAULT_CONFIG.diasDescansoExcesivo;
+    CONFIG.diasOptimo = parseInt(document.getElementById('cfg_diasOptimo').value) || DEFAULT_CONFIG.diasOptimo;
+    CONFIG.sesionesRegresionAlerta = parseInt(document.getElementById('cfg_sesionesRegresionAlerta').value) || DEFAULT_CONFIG.sesionesRegresionAlerta;
+    CONFIG.semanasEstancamiento = parseInt(document.getElementById('cfg_semanasEstancamiento').value) || DEFAULT_CONFIG.semanasEstancamiento;
+    saveConfig();
+    renderNotificaciones();
+    toast('✅ Configuración guardada', 'success');
+  });
+
+  // Botón restaurar defaults
+  document.getElementById('resetConfigBtn').addEventListener('click', function() {
+    mostrarModal('¿Restaurar valores por defecto?', 'Se restablecerán todos los parámetros y mensajes de las reglas.', function() {
+      CONFIG = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+      RULES  = JSON.parse(JSON.stringify(DEFAULT_RULES));
+      saveConfig();
+      renderConfigPanel();
+      renderNotificaciones();
+      toast('↺ Valores restaurados', 'info');
+    });
+  });
+
+  // Exportar / borrar (solo modo entrenador)
+  if (!MODO_CLIENTE) {
+    const linkBtn = document.getElementById('generarLinkBtn');
+    linkBtn.style.display = 'inline-flex';
+    linkBtn.addEventListener('click', function() {
+      const panel = document.getElementById('panelGenerarLink');
+      if (panel.style.display === 'none') abrirPanelLink(); else cerrarPanelLink();
+    });
+    const borrarBtn = document.getElementById('borrarTodosBtn');
+    borrarBtn.style.display = 'inline-flex';
+    borrarBtn.addEventListener('click', clearAll);
+  } else {
+    var nombreVisible = _clienteId.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+    var headerNombre = document.getElementById('clienteNombreHeader');
+    headerNombre.textContent = '👤 ' + nombreVisible;
+    headerNombre.style.display = 'inline-block';
+    // Ocultar tab de config en modo cliente
+    document.getElementById('tab-config').style.display = 'none';
+    ['generarLinkBtn','borrarTodosBtn','panelGenerarLink'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.parentNode.removeChild(el);
+    });
+  }
+
+  window.eliminarEjercicio = eliminarEjercicio;
+  window.switchTab = switchTab;
+
+  renderAll();
+</script>
+</body>
+</html>
