@@ -810,6 +810,8 @@
 
 <div id="toast"></div>
 
+<datalist id="ejercicios_sugeridos"></datalist>
+
 <script>
   // ================= CONFIGURACIÓN =================
   var _urlParams = new URLSearchParams(window.location.search);
@@ -862,14 +864,11 @@
       activa: true,
       titulo: '⬆️ Subir peso — Reps objetivo alcanzadas',
       mensaje: 'En {ejercicio} ({grupo}) alcanzaste o superaste el objetivo de {reps_objetivo} reps en al menos {series_minimas} series, durante {sesiones_consecutivas} sesiones seguidas. Es momento de subir el peso un {porciento}% (~{peso} kg).',
-      // Umbrales de reps por grupo muscular (editables desde el panel)
-      reps_por_grupo: {
-        Pecho:    10,
-        Espalda:  10,
-        Piernas:  12,
-        Hombros:  12,
-        Brazos:   15,
-        Core:     15,
+      // Umbrales de reps por ejercicio (editables desde el panel)
+      reps_por_ejercicio: {
+        "Press de banca": 10,
+        "Sentadilla": 12,
+        "Peso muerto": 10
       },
       series_minimas_pct: 75,    // % mínimo de series que deben cumplir el umbral (ej: 75% = 3 de 4, 2 de 3, 2 de 2)
       sesiones_consecutivas: 2,  // sesiones seguidas que deben cumplir la condición
@@ -1150,36 +1149,37 @@
         }
       }
 
-      // 5. REPS OBJETIVO POR GRUPO MUSCULAR → subir peso
+      // 5. REPS OBJETIVO POR EJERCICIO → subir peso
       const rRepsObj = RULES.find(r => r.id === 'subir_peso_reps_objetivo');
       if (rRepsObj && rRepsObj.activa && n >= rRepsObj.sesiones_consecutivas) {
-        const grupo = filas[0].grupo || '';
-        const repsObjetivo = (rRepsObj.reps_por_grupo && rRepsObj.reps_por_grupo[grupo]) || 10;
-        const seriesMinPct = rRepsObj.series_minimas_pct || 75;
-        const ultimasSesiones = recientes.slice(-rRepsObj.sesiones_consecutivas);
-        const todasCumplen = ultimasSesiones.length >= rRepsObj.sesiones_consecutivas &&
-          ultimasSesiones.every(fila => {
-            const totalSeries = fila.repsArray.length;
-            if (totalSeries === 0) return false;
-            const seriesNecesarias = Math.ceil(totalSeries * seriesMinPct / 100);
-            const seriesCumplen = fila.repsArray.filter(r => r >= repsObjetivo).length;
-            return seriesCumplen >= seriesNecesarias;
-          });
-        if (todasCumplen) {
-          const incPct = rRepsObj.incremento_porciento;
-          const incKg = Math.max(rRepsObj.incremento_minimo_kg, ultima.peso * incPct / 100);
-          const pesoNuevo = redondearPeso(ultima.peso + incKg);
-          const seriesMinimas = Math.ceil((ultima.repsArray.length || 1) * seriesMinPct / 100);
-          notifs.push({
-            tipo: rRepsObj.tipo, titulo: rRepsObj.titulo,
-            mensaje: interpolar(rRepsObj.mensaje, {
-              ejercicio: nombre, valor: repsObjetivo,
-              grupo: grupo, reps_objetivo: repsObjetivo,
-              series_minimas: seriesMinimas,
-              sesiones_consecutivas: rRepsObj.sesiones_consecutivas,
-              porciento: incPct, peso: pesoNuevo
-            })
-          });
+        const repsObjetivo = (rRepsObj.reps_por_ejercicio && rRepsObj.reps_por_ejercicio[nombre]);
+        if (repsObjetivo) {
+          const seriesMinPct = rRepsObj.series_minimas_pct || 75;
+          const ultimasSesiones = recientes.slice(-rRepsObj.sesiones_consecutivas);
+          const todasCumplen = ultimasSesiones.length >= rRepsObj.sesiones_consecutivas &&
+            ultimasSesiones.every(fila => {
+              const totalSeries = fila.repsArray.length;
+              if (totalSeries === 0) return false;
+              const seriesNecesarias = Math.ceil(totalSeries * seriesMinPct / 100);
+              const seriesCumplen = fila.repsArray.filter(r => r >= repsObjetivo).length;
+              return seriesCumplen >= seriesNecesarias;
+            });
+          if (todasCumplen) {
+            const incPct = rRepsObj.incremento_porciento;
+            const incKg = Math.max(rRepsObj.incremento_minimo_kg, ultima.peso * incPct / 100);
+            const pesoNuevo = redondearPeso(ultima.peso + incKg);
+            const seriesMinimas = Math.ceil((ultima.repsArray.length || 1) * seriesMinPct / 100);
+            notifs.push({
+              tipo: rRepsObj.tipo, titulo: rRepsObj.titulo,
+              mensaje: interpolar(rRepsObj.mensaje, {
+                ejercicio: nombre, valor: repsObjetivo,
+                grupo: filas[0].grupo || '', reps_objetivo: repsObjetivo,
+                series_minimas: seriesMinimas,
+                sesiones_consecutivas: rRepsObj.sesiones_consecutivas,
+                porciento: incPct, peso: pesoNuevo
+              })
+            });
+          }
         }
       }
 
@@ -1364,13 +1364,15 @@
       });
     });
 
-    // Bind umbrales de reps por grupo muscular
-    editor.querySelectorAll('[data-rule][data-param-grupo]').forEach(el => {
+    // Bind umbrales de reps por ejercicio
+    editor.querySelectorAll('[data-rule][data-param-ejercicio]').forEach(el => {
       el.addEventListener('input', function() {
         const rule = RULES.find(r => r.id === this.dataset.rule);
         if (rule) {
-          if (!rule.reps_por_grupo) rule.reps_por_grupo = {};
-          rule.reps_por_grupo[this.dataset.paramGrupo] = parseInt(this.value) || 10;
+          if (!rule.reps_por_ejercicio) rule.reps_por_ejercicio = {};
+          rule.reps_por_ejercicio[this.dataset.paramEjercicio] = parseInt(this.value) || 10;
+          if (typeof actualizarDatalistEjercicios === 'function') actualizarDatalistEjercicios();
+          saveConfig();
         }
       });
     });
@@ -1417,21 +1419,28 @@
 
     const params = paramFields[rule.id];
     if (params === null && rule.id === 'subir_peso_reps_objetivo') {
-      // Render especial: umbrales por grupo muscular
-      const grupos = ['Pecho','Espalda','Piernas','Hombros','Brazos','Core'];
-      const gruposHTML = grupos.map(g => `
-        <div class="config-group">
-          <label>Reps objetivo — ${g}</label>
-          <input type="number" step="1" min="1" max="50"
-            data-rule="${rule.id}" data-param-grupo="${g}"
-            value="${rule.reps_por_grupo && rule.reps_por_grupo[g] !== undefined ? rule.reps_por_grupo[g] : 10}">
+      // Render especial: umbrales por ejercicio
+      const ejerciciosHTML = Object.entries(rule.reps_por_ejercicio || {}).map(([ejNombre, ejReps]) => `
+        <div class="config-group" style="flex-direction: row; align-items: center; gap: 8px;">
+          <input type="text" value="${escapeHtml(ejNombre)}" readonly style="flex:1; background:var(--bg2);">
+          <input type="number" step="1" min="1" max="50" style="width: 80px;"
+            data-rule="${rule.id}" data-param-ejercicio="${escapeHtml(ejNombre)}"
+            value="${ejReps}">
+          <button type="button" class="del-btn" style="min-width:36px; min-height:36px; height:36px;" onclick="eliminarEjercicioRegla('${escapeHtml(ejNombre)}')">✕</button>
         </div>
       `).join('');
       return `
         <div class="config-group config-wide" style="grid-column:1/-1">
-          <div class="hint" style="margin-bottom:8px">⚙️ Reps objetivo por grupo muscular — la notificación se activa cuando el cliente iguala o supera este número en al menos N series.</div>
+          <div class="hint" style="margin-bottom:8px">⚙️ Reps objetivo por ejercicio — la notificación se activa cuando el cliente iguala o supera este número en al menos N series.</div>
+          <div id="lista_reps_ejercicios" style="display:flex; flex-direction:column; gap:8px;">
+            ${ejerciciosHTML}
+          </div>
+          <div style="display:flex; gap:8px; margin-top:8px;">
+             <input type="text" id="nuevo_ejercicio_regla" placeholder="Nombre del ejercicio" style="flex:1;">
+             <input type="number" id="nuevo_reps_regla" placeholder="Reps" style="width:80px;" min="1" step="1">
+             <button type="button" class="btn btn-ghost" onclick="agregarEjercicioRegla()">Agregar</button>
+          </div>
         </div>
-        ${gruposHTML}
         <div class="config-group">
           <label>% mínimo de series que deben cumplir</label>
           <input type="number" step="5" min="1" max="100" data-rule="${rule.id}" data-param="series_minimas_pct" value="${rule.series_minimas_pct || 75}">
@@ -1783,7 +1792,7 @@
         <div class="form-grid">
           <div class="form-group">
             <label>Ejercicio</label>
-            <input type="text" placeholder="" value="${escapeHtml(ej.nombre)}" data-field="nombre" data-idx="${idx}">
+            <input type="text" list="ejercicios_sugeridos" placeholder="" value="${escapeHtml(ej.nombre)}" data-field="nombre" data-idx="${idx}">
           </div>
           <div class="form-group">
             <label>Grupo muscular</label>
@@ -1996,8 +2005,43 @@
     if (activeTab === 'hist') renderHistorial();
     if (activeTab === 'chart') renderChart();
     renderNotificaciones();
-
+    if (typeof actualizarDatalistEjercicios === 'function') actualizarDatalistEjercicios();
   }
+
+  function actualizarDatalistEjercicios() {
+    const dl = document.getElementById('ejercicios_sugeridos');
+    if (!dl) return;
+    const rule = RULES.find(r => r.id === 'subir_peso_reps_objetivo');
+    const ejerciciosRegla = rule && rule.reps_por_ejercicio ? Object.keys(rule.reps_por_ejercicio) : [];
+    const ejerciciosHistorial = obtenerTodosEjercicios();
+    const setEj = new Set([...ejerciciosRegla, ...ejerciciosHistorial]);
+    dl.innerHTML = Array.from(setEj).sort().map(ej => `<option value="${escapeHtml(ej)}"></option>`).join('');
+  }
+
+  window.eliminarEjercicioRegla = function(nombre) {
+    const rule = RULES.find(r => r.id === 'subir_peso_reps_objetivo');
+    if (rule && rule.reps_por_ejercicio) {
+      delete rule.reps_por_ejercicio[nombre];
+      renderConfigPanel();
+      saveConfig();
+      actualizarDatalistEjercicios();
+    }
+  };
+
+  window.agregarEjercicioRegla = function() {
+    const nombre = document.getElementById('nuevo_ejercicio_regla').value.trim();
+    const reps = parseInt(document.getElementById('nuevo_reps_regla').value);
+    if (!nombre || !reps || isNaN(reps)) { toast('Ingresa nombre y repeticiones', 'error'); return; }
+    const rule = RULES.find(r => r.id === 'subir_peso_reps_objetivo');
+    if (rule) {
+      if (!rule.reps_por_ejercicio) rule.reps_por_ejercicio = {};
+      const normNombre = nombre.charAt(0).toUpperCase() + nombre.slice(1).toLowerCase();
+      rule.reps_por_ejercicio[normNombre] = reps;
+      renderConfigPanel();
+      saveConfig();
+      actualizarDatalistEjercicios();
+    }
+  };
 
   // ===== STORAGE SEGURO =====
   var _localStorageDisponible = (function() {
